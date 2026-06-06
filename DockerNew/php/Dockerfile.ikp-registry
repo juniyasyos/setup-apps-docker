@@ -10,25 +10,38 @@ ARG TZ=Asia/Jakarta
 ARG APP_NAME="IKP Application"
 
 # Sistem & build deps
-RUN apk add --no-cache --virtual .build-deps \
-      $PHPIZE_DEPS \
+RUN apk add --no-cache \
+      tzdata bash shadow ca-certificates unzip \
       icu-dev oniguruma-dev libzip-dev zlib-dev \
       libpng-dev libjpeg-turbo-dev freetype-dev \
-      libxml2-dev postgresql-dev linux-headers \
-    && apk add --no-cache \
-      tzdata ca-certificates unzip curl openssl su-exec \
-      icu-libs libzip libpng libjpeg-turbo freetype postgresql-libs \
-    && cp /usr/share/zoneinfo/${TZ} /etc/localtime \
-    && echo "${TZ}" > /etc/timezone \
-    && docker-php-ext-configure intl \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j"$(nproc)" \
-       intl mbstring pdo pdo_mysql pdo_pgsql pgsql zip gd \
-       bcmath exif pcntl sockets opcache \
-    && pecl install igbinary \
-    && docker-php-ext-enable igbinary \
-    && apk del .build-deps \
-    && rm -rf /var/cache/apk/* /tmp/*
+      libxml2-dev postgresql-dev \
+      linux-headers \
+      curl openssl \
+      mariadb-client \
+      su-exec \
+      $PHPIZE_DEPS \
+  && cp /usr/share/zoneinfo/${TZ} /etc/localtime \
+  && echo "${TZ}" > /etc/timezone \
+  && docker-php-ext-configure intl \
+  && docker-php-ext-configure gd --with-freetype --with-jpeg \
+  && docker-php-ext-install -j"$(nproc)" \
+      intl \
+      mbstring \
+      pdo \
+      pdo_mysql \
+      pdo_pgsql \
+      pgsql \
+      zip \
+      gd \
+      bcmath \
+      exif \
+      pcntl \
+      sockets \
+      opcache \
+  && pecl install igbinary apcu \
+  && docker-php-ext-enable igbinary apcu \
+  && apk del --no-network $PHPIZE_DEPS linux-headers \
+  && rm -rf /var/cache/apk/* /tmp/*
 
 # User non-root
 RUN addgroup -g "${GID}" www \

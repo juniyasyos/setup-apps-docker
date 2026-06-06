@@ -10,27 +10,36 @@ ARG TZ=Asia/Jakarta
 ARG APP_NAME="SIIMUT Application"
 
 # Install system dependencies and PHP extensions
-RUN apk add \
+RUN apk add --no-cache \
       tzdata bash shadow ca-certificates unzip \
       icu-dev oniguruma-dev libzip-dev zlib-dev \
       libpng-dev libjpeg-turbo-dev freetype-dev \
       libxml2-dev postgresql-dev \
       linux-headers \
       curl openssl \
+      mariadb-client \
+      su-exec \
       $PHPIZE_DEPS \
   && cp /usr/share/zoneinfo/${TZ} /etc/localtime \
   && echo "${TZ}" > /etc/timezone \
-  # Configure and install PHP extensions
   && docker-php-ext-configure intl \
   && docker-php-ext-configure gd --with-freetype --with-jpeg \
   && docker-php-ext-install -j"$(nproc)" \
-       intl mbstring pdo pdo_mysql pdo_pgsql pgsql zip gd \
-       bcmath exif pcntl sockets opcache \
-  # Install PECL extensions
+      intl \
+      mbstring \
+      pdo \
+      pdo_mysql \
+      pdo_pgsql \
+      pgsql \
+      zip \
+      gd \
+      bcmath \
+      exif \
+      pcntl \
+      sockets \
+      opcache \
   && pecl install igbinary apcu \
   && docker-php-ext-enable igbinary apcu \
-  && apk add --no-cache su-exec \
-  # Cleanup build dependencies
   && apk del --no-network $PHPIZE_DEPS linux-headers \
   && rm -rf /var/cache/apk/* /tmp/*
 
