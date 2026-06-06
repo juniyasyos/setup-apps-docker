@@ -5,7 +5,7 @@ services:
     extends:
       file: ../compose.common.yml
       service: php-app-base
-    image: ikp:v1.3.0
+    image: ikp:v1.0.0
     container_name: ikp-app
     working_dir: /var/www/ikp
     env_file:
@@ -26,7 +26,7 @@ services:
       AWS_SECRET_ACCESS_KEY: password
       AWS_BUCKET: ikp
       AWS_URL: http://192.168.1.4:9090/ikp
-      AWS_ENDPOINT: http://192.168.1.4:9090
+      AWS_ENDPOINT: http://minio:9090
       MEDIA_DISK: s3
       USE_SSO: "true"
       IAM_ENABLED: "true"
@@ -60,7 +60,7 @@ services:
     extends:
       file: ../compose.common.yml
       service: php-worker-base
-    image: ikp:v1.3.0
+    image: ikp:v1.0.0
     container_name: ikp-queue
     working_dir: /var/www/ikp
     env_file:
@@ -93,7 +93,7 @@ services:
     extends:
       file: ../compose.common.yml
       service: php-scheduler-base
-    image: ikp:v1.3.0
+    image: ikp:v1.0.0
     container_name: ikp-scheduler
     working_dir: /var/www/ikp
     env_file:

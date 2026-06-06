@@ -59,9 +59,9 @@ if [ -z "$VERSION" ]; then
 fi
 
 # Per-service version overrides can be set with environment variables.
-SIIMUT_VERSION="v3.1.0"
-IKP_VERSION="v1.3.0"
-IAM_VERSION="v2.1.0"
+SIIMUT_VERSION="v2.0.0"
+IKP_VERSION="v1.0.0"
+IAM_VERSION="v1.0.0"
 # SIIMUT_VERSION="${SIIMUT_VERSION:-$VERSION}"
 # IKP_VERSION="${IKP_VERSION:-$VERSION}"
 # IAM_VERSION="${IAM_VERSION:-$VERSION}"

@@ -5,7 +5,7 @@ services:
     extends:
       file: ../compose.common.yml
       service: php-app-base
-    image: iam-server:v2.1.0
+    image: iam-server:v1.0.0
     container_name: iam-app
     working_dir: /var/www/iam
     env_file:
@@ -24,7 +24,7 @@ services:
       AWS_DEFAULT_REGION: us-east-1
       AWS_BUCKET: data-center
       AWS_URL: http://192.168.1.4:9090/data-center
-      AWS_ENDPOINT: http://192.168.1.4:9090
+      AWS_ENDPOINT: http://minio:9090
       AWS_USE_PATH_STYLE_ENDPOINT: "true"
       MEDIA_DISK: s3
     volumes:
@@ -48,7 +48,7 @@ services:
     extends:
       file: ../compose.common.yml
       service: php-worker-base
-    image: iam-server:v2.1.0
+    image: iam-server:v1.0.0
     container_name: iam-queue
     working_dir: /var/www/iam
     env_file:
@@ -90,7 +90,7 @@ services:
     extends:
       file: ../compose.common.yml
       service: php-scheduler-base
-    image: iam-server:v2.1.0
+    image: iam-server:v1.0.0
     container_name: iam-scheduler
     working_dir: /var/www/iam
     env_file:

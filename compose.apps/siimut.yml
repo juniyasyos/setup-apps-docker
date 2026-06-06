@@ -5,7 +5,7 @@ services:
     extends:
       file: ../compose.common.yml
       service: php-app-base
-    image: siimut:v3.1.0
+    image: siimut:v2.0k.0
     container_name: siimut-app
     working_dir: /var/www/siimut
     env_file:
@@ -45,8 +45,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
-          cpus: "1"
+          memory: 2G
+          cpus: "2"
         reservations:
           memory: 512M
           cpus: "0.5"
@@ -55,7 +55,7 @@ services:
     extends:
       file: ../compose.common.yml
       service: php-worker-base
-    image: siimut:v3.1.0
+    image: siimut:v2.0.0
     container_name: siimut-queue
     working_dir: /var/www/siimut
     env_file:
@@ -69,11 +69,11 @@ services:
       - siimut_bootstrap_cache:/var/www/siimut/bootstrap/cache
     command: >
       artisan queue:work
-        --sleep=5
+        --sleep=1
         --tries=3
         --timeout=120
-        --max-jobs=500
-        --max-time=3600
+        --max-jobs=100
+        --max-time=500
     deploy:
       resources:
         limits:
@@ -87,7 +87,7 @@ services:
     extends:
       file: ../compose.common.yml
       service: php-scheduler-base
-    image: siimut:v3.1.0
+    image: siimut:v2.0.0
     container_name: siimut-scheduler
     working_dir: /var/www/siimut
     env_file:
@@ -105,7 +105,7 @@ services:
       resources:
         limits:
           memory: 128M
-          cpus: "0.1"
+          cpus: "0.5"
         reservations:
           memory: 64M
           cpus: "0.1"
