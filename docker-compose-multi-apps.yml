@@ -23,13 +23,6 @@ services:
       # # IAM (optional)
       - iam_public:/var/www/iam/public:ro
       - nginx_logs:/var/log/nginx
-    depends_on:
-      app-siimut:
-        condition: service_healthy
-      app-ikp:
-        condition: service_healthy
-      app-iam:
-        condition: service_healthy
     restart: unless-stopped
     # Production resource limits
     deploy:
