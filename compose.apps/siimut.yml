@@ -5,7 +5,7 @@ services:
     extends:
       file: ../compose.common.yml
       service: php-app-base
-    image: siimut:v2.0k.0
+    image: siimut:v2.0.0
     container_name: siimut-app
     working_dir: /var/www/siimut
     env_file:
