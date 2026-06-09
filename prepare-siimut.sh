@@ -72,7 +72,7 @@ echo "🔍 Starting local verification and build preparation..."
 cd "${SITE_DIR}"
 
 # parse arguments
-NO_DEPS=false
+NO_DEPS=true
 for arg in "$@"; do
     case $arg in
         --no-install-dependencies|--no-install-depedencies)
