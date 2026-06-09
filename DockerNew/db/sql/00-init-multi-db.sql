@@ -72,6 +72,28 @@ GRANT SELECT ON ikp_db.* TO 'ikp_readonly'@'%';
 
 
 -- =================================================
+--  LMS Database
+-- =================================================
+CREATE DATABASE IF NOT EXISTS db_lms_citrahusada
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+
+-- Create IAM user (R/W FULL)
+CREATE USER IF NOT EXISTS 'lms_user'@'%'
+  IDENTIFIED BY 'lms-password';
+
+GRANT ALL PRIVILEGES
+  ON db_lms_citrahusada.* TO 'lms_user'@'%';
+
+
+-- Optional: readonly user
+CREATE USER IF NOT EXISTS 'lms_readonly'@'%'
+  IDENTIFIED BY 'lms@ReadOnly2025!';
+
+GRANT SELECT ON db_lms_citrahusada.* TO 'ikp_readonly'@'%';
+
+
+-- =================================================
 --  Finalize Privileges
 -- =================================================
 FLUSH PRIVILEGES;
