@@ -78,6 +78,14 @@ RUN set -eux; \
     composer dump-autoload --optimize --classmap-authoritative --no-scripts || true; \
     rm -rf "$COMPOSER_CACHE_DIR" /tmp/*
 
+COPY site/${APP_DIR}/ .
+RUN set -eux; \
+    composer dump-autoload --optimize --classmap-authoritative --no-scripts || true; \
+    if [ -f .env ]; then \
+      php artisan optimize || true; \
+    fi; \
+    rm -rf /tmp/*
+
 # =========================
 # Stage 3: Runtime
 # =========================
@@ -90,7 +98,7 @@ ENV APP_ENV=production \
     PHP_OPCACHE_VALIDATE_TIMESTAMPS=1 \
     PHP_MEMORY_LIMIT=512M \
     APP_NAME=${APP_NAME} \
-    APP_WORKDIR=/var/www/lms
+    APP_WORKDIR=/var/www/lms-app
 
 WORKDIR ${APP_WORKDIR}
 
