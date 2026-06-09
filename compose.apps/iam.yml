@@ -71,7 +71,7 @@ services:
       - iam_storage:/var/www/iam/storage
       - iam_bootstrap_cache:/var/www/iam/bootstrap/cache
     command: >
-      php artisan queue:work
+      artisan queue:work
         --sleep=5
         --tries=3
         --timeout=120
@@ -113,7 +113,7 @@ services:
       - iam_storage:/var/www/iam/storage
       - iam_bootstrap_cache:/var/www/iam/bootstrap/cache
     command: >
-      php artisan schedule:work
+      artisan schedule:work
     deploy:
       resources:
         limits:
