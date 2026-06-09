@@ -30,6 +30,11 @@ set_env() {
     if grep -q "^${key}=" .env 2>/dev/null; then
         sed -i "s~^${key}=.*~${key}=${value}~" .env
     else
+        # Ensure trailing newline before appending to avoid corrupting last line
+        # (e.g., VITE_APP_NAME="${APP_NAME}"APP_WORKDIR=/var/www/lms-app)
+        if [ -s .env ] && [ "$(tail -c1 .env | xxd -p)" != "0a" ]; then
+            echo >> .env
+        fi
         printf '%s=%s\n' "$key" "$value" >> .env
     fi
 }
