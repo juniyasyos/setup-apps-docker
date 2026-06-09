@@ -82,3 +82,20 @@ services:
         BUILD_TIMESTAMP: "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
     image: iam-server:${IAM_VERSION:-latest}
     pull_policy: never
+
+  ####################################################################################################
+  # IAM Server Build Service
+  ####################################################################################################
+  lms-app:
+    build:
+      context: .
+      dockerfile: DockerNew/php/Dockerfile.lms-registry
+      args:
+        UID: "1000"
+        GID: "1000"
+        TZ: "Asia/Jakarta"
+        APP_ENV: "production"
+        APP_DIR: "lms-app"
+        BUILD_TIMESTAMP: "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+    image: lms-app:${LMS_VERSION:-latest}
+    pull_policy: never

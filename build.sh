@@ -3,12 +3,13 @@
 ####################################################################################################
 # Multi-App Build & Push to Docker Hub Script
 # 
-# Purpose: Build SIIMUT, IKP, and IAM Server images, tag them, and push to Docker Hub
+# Purpose: Build SIIMUT, IKP, IAM Server, and LMS App images, tag them, and push to Docker Hub
 # Usage:
 #   ./build.sh                   # Build SIIMUT only
 #   ./build.sh push              # Build SIIMUT and push
 #   ./build.sh ikp push          # Build IKP and push
 #   ./build.sh iam push          # Build IAM Server and push
+#   ./build.sh lms push          # Build LMS App and push
 #   ./build.sh all push          # Build all apps and push
 #   VERSION=v1.0.0 ./build.sh push  # Build specific version
 #
@@ -62,6 +63,7 @@ fi
 SIIMUT_VERSION="v2.0.0"
 IKP_VERSION="v1.0.0"
 IAM_VERSION="v1.0.0"
+LMS_VERSION="v1.0.0"
 # SIIMUT_VERSION="${SIIMUT_VERSION:-$VERSION}"
 # IKP_VERSION="${IKP_VERSION:-$VERSION}"
 # IAM_VERSION="${IAM_VERSION:-$VERSION}"
@@ -71,6 +73,7 @@ normalize_target() {
         siimut) echo "siimut" ;;
         ikp) echo "ikp" ;;
         iam|iam-server|iamserver) echo "iam-server" ;;
+        lms|lms-app|lmsapp) echo "lms-app" ;;
         all) echo "all" ;;
         build|tag|push|help|--help|-h) echo "siimut" ;;
         "") echo "siimut" ;;
@@ -100,7 +103,7 @@ if [ -z "$TARGET" ]; then
 fi
 
 if [ "$TARGET" = "all" ]; then
-    SELECTED_SERVICES=(siimut ikp iam-server)
+    SELECTED_SERVICES=(siimut ikp iam-server lms-app)
 else
     SELECTED_SERVICES=($TARGET)
 fi
@@ -119,6 +122,9 @@ service_version() {
             ;;
         iam-server)
             echo "$IAM_VERSION"
+            ;;
+        lms-app)
+            echo "$LMS_VERSION"
             ;;
         *)
             echo "$VERSION"
@@ -179,6 +185,7 @@ print_config() {
     echo "║  SIIMUT Version:   $SIIMUT_VERSION"
     echo "║  IKP Version:      $IKP_VERSION"
     echo "║  IAM Version:      $IAM_VERSION"
+    echo "║  LMS Version:      $LMS_VERSION"
     echo "║  Compose File:     $COMPOSE_FILE"
     echo "║  Command:          $COMMAND"
     echo "╚════════════════════════════════════════════╝"
@@ -189,13 +196,13 @@ build_image() {
     log_info "Building ${SELECTED_SERVICES[*]} from $COMPOSE_FILE..."
 
     if [ "$TARGET" = "all" ]; then
-        if SIIMUT_VERSION="$SIIMUT_VERSION" IKP_VERSION="$IKP_VERSION" IAM_VERSION="$IAM_VERSION" \
+        if SIIMUT_VERSION="$SIIMUT_VERSION" IKP_VERSION="$IKP_VERSION" IAM_VERSION="$IAM_VERSION" LMS_VERSION="$LMS_VERSION" \
             docker compose -f "$SCRIPT_DIR/$COMPOSE_FILE" build; then
             log_success "Build completed successfully"
             return 0
         fi
     else
-        if SIIMUT_VERSION="$SIIMUT_VERSION" IKP_VERSION="$IKP_VERSION" IAM_VERSION="$IAM_VERSION" \
+        if SIIMUT_VERSION="$SIIMUT_VERSION" IKP_VERSION="$IKP_VERSION" IAM_VERSION="$IAM_VERSION" LMS_VERSION="$LMS_VERSION" \
             docker compose -f "$SCRIPT_DIR/$COMPOSE_FILE" build "${SELECTED_SERVICES[@]}"; then
             log_success "Build completed successfully"
             return 0
@@ -294,6 +301,7 @@ APPS:
     siimut               Build SIIMUT image (default)
     ikp                  Build IKP image
     iam                  Build IAM Server image
+    lms                  Build LMS App image
     all                  Build all images
 
 COMMANDS:
@@ -315,8 +323,11 @@ EXAMPLES:
     # Build and push IAM Server image
     DOCKER_HUB_USER=juniyasyos VERSION=v1.0.1 ./build.sh iam push
 
-    # Build all 3 images with separate versions and push
-    SIIMUT_VERSION=v3.1.0 IKP_VERSION=v1.3.0 IAM_VERSION=v2.1.0 DOCKER_HUB_USER=juniyasyos ./build.sh all push
+    # Build and push LMS App image
+    DOCKER_HUB_USER=juniyasyos VERSION=v1.0.1 ./build.sh lms push
+
+    # Build all 4 images with separate versions and push
+    SIIMUT_VERSION=v3.1.0 IKP_VERSION=v1.3.0 IAM_VERSION=v2.1.0 LMS_VERSION=v1.0.0 DOCKER_HUB_USER=juniyasyos ./build.sh all push
 
 ENVIRONMENT VARIABLES:
     DOCKER_HUB_USER        Docker Hub username (default: detected from Docker login, or 'juni' if unknown)
@@ -324,6 +335,7 @@ ENVIRONMENT VARIABLES:
     SIIMUT_VERSION         Optional per-service version for SIIMUT
     IKP_VERSION            Optional per-service version for IKP
     IAM_VERSION            Optional per-service version for IAM Server
+    LMS_VERSION            Optional per-service version for LMS App
 
 CONFIGURATION FILES:
     VERSION                Contains version string (e.g., v1.0.0)
