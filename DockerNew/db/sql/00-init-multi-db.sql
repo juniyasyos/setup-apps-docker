@@ -90,7 +90,7 @@ GRANT ALL PRIVILEGES
 CREATE USER IF NOT EXISTS 'lms_readonly'@'%'
   IDENTIFIED BY 'lms@ReadOnly2025!';
 
-GRANT SELECT ON db_lms_citrahusada.* TO 'ikp_readonly'@'%';
+GRANT SELECT ON db_lms_citrahusada.* TO 'lms_readonly'@'%';
 
 
 -- =================================================
