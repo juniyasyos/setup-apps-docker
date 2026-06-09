@@ -104,6 +104,25 @@ services:
       file: compose.apps/iam.yml
       service: scheduler
 
+
+  ####################################################################################################
+  # Apps LMS
+  ####################################################################################################
+  app-lms:
+    extends:
+      file: compose.apps/lms.yml
+      service: app
+
+  queue-lms:
+    extends:
+      file: compose.apps/lms.yml
+      service: queue
+
+  scheduler-lms:
+    extends:
+      file: compose.apps/lms.yml
+      service: scheduler
+
   ###################################################################################################
   ###################################################################################################
   # End Section: Apps - Production Application
@@ -125,6 +144,8 @@ volumes:
     driver: local
   iam_public:
     driver: local
+  lms_public:
+    driver: local
 
   # ====== DATA PERSISTEN LARAVEL (tanpa vendor) ======
   # SIIMUT
@@ -143,6 +164,12 @@ volumes:
   iam_storage:
     driver: local
   iam_bootstrap_cache:
+    driver: local
+
+  # # LMS
+  lms_storage:
+    driver: local
+  lms_bootstrap_cache:
     driver: local
 
 ####################################################################################################
