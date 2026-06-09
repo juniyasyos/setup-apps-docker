@@ -95,7 +95,7 @@ services:
         GID: "1000"
         TZ: "Asia/Jakarta"
         APP_ENV: "production"
-        APP_DIR: "lms-app"
+        APP_DIR: "app-lms"
         BUILD_TIMESTAMP: "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
     image: lms-app:${LMS_VERSION:-latest}
     pull_policy: never
