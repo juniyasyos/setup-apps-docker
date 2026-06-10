@@ -16,16 +16,16 @@ services:
       - ./DockerNew/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./DockerNew/nginx/nginx-multi-apps.conf:/etc/nginx/conf.d/default.conf:ro
       # SIIMUT
-      # - siimut_public:/var/www/siimut/public:ro
-      # - siimut_storage:/var/www/siimut/storage:ro
-      # # IKP
-      # - ikp_public:/var/www/ikp/public:ro
-      # - ikp_storage:/var/www/ikp/storage:ro
-      # # LMS
+      - siimut_public:/var/www/siimut/public:ro
+      - siimut_storage:/var/www/siimut/storage:ro
+      # IKP
+      - ikp_public:/var/www/ikp/public:ro
+      - ikp_storage:/var/www/ikp/storage:ro
+      # LMS
       - lms_public:/var/www/lms-app/public:ro
       - lms_storage:/var/www/lms-app/storage:ro
       # # IAM
-      # - iam_public:/var/www/iam/public:ro
+      - iam_public:/var/www/iam/public:ro
       - nginx_logs:/var/log/nginx
     restart: unless-stopped
     # Production resource limits
@@ -142,33 +142,33 @@ volumes:
     driver: local
 
   # ====== PUBLIC ASSETS (untuk Nginx serve static files) ======
-  # siimut_public:
-  #   driver: local
-  # ikp_public:
-  #   driver: local
-  # iam_public:
-  #   driver: local
+  siimut_public:
+    driver: local
+  ikp_public:
+    driver: local
+  iam_public:
+    driver: local
   lms_public:
     driver: local
 
   # ====== DATA PERSISTEN LARAVEL (tanpa vendor) ======
-  # # SIIMUT
-  # siimut_storage:
-  #   driver: local
-  # siimut_bootstrap_cache:
-  #   driver: local
+  # SIIMUT
+  siimut_storage:
+    driver: local
+  siimut_bootstrap_cache:
+    driver: local
 
-  # # IKP
-  # ikp_storage:
-  #   driver: local
-  # ikp_bootstrap_cache:
-  #   driver: local
+  # IKP
+  ikp_storage:
+    driver: local
+  ikp_bootstrap_cache:
+    driver: local
 
-  # # # IAM
-  # iam_storage:
-  #   driver: local
-  # iam_bootstrap_cache:
-  #   driver: local
+  # # IAM
+  iam_storage:
+    driver: local
+  iam_bootstrap_cache:
+    driver: local
 
   # # LMS
   lms_storage:
