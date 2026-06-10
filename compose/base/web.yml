@@ -67,3 +67,7 @@ volumes:
     external: true
   iam_public:
     external: true
+  lms_public:
+    external: true
+  lms_storage:
+    external: true
