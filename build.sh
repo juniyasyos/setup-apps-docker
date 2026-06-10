@@ -10,6 +10,7 @@
 #   ./build.sh ikp push          # Build IKP and push
 #   ./build.sh iam push          # Build IAM Server and push
 #   ./build.sh lms push          # Build LMS App and push
+#   ./build.sh Smartpresensing push          # Build Smartpresensing App and push
 #   ./build.sh all push          # Build all apps and push
 #   VERSION=v1.0.0 ./build.sh push  # Build specific version
 #
@@ -64,6 +65,7 @@ SIIMUT_VERSION="v2.0.0"
 IKP_VERSION="v1.0.0"
 IAM_VERSION="v1.0.0"
 LMS_VERSION="v1.0.0"
+SMARTPROESENSING_VERSION="v1.0.0"
 # SIIMUT_VERSION="${SIIMUT_VERSION:-$VERSION}"
 # IKP_VERSION="${IKP_VERSION:-$VERSION}"
 # IAM_VERSION="${IAM_VERSION:-$VERSION}"
@@ -74,6 +76,7 @@ normalize_target() {
         ikp) echo "ikp" ;;
         iam|iam-server|iamserver) echo "iam-server" ;;
         lms|lms-app|lmsapp) echo "lms-app" ;;
+        smartpresensing|smartpresensing-app|smartpresensing) echo "smartpresensing-app" ;;
         all) echo "all" ;;
         build|tag|push|help|--help|-h) echo "siimut" ;;
         "") echo "siimut" ;;
@@ -125,6 +128,9 @@ service_version() {
             ;;
         lms-app)
             echo "$LMS_VERSION"
+            ;;
+        smartpresensing-app)
+            echo "$SMARTPROESENSING_VERSION"
             ;;
         *)
             echo "$VERSION"
@@ -186,6 +192,7 @@ print_config() {
     echo "║  IKP Version:      $IKP_VERSION"
     echo "║  IAM Version:      $IAM_VERSION"
     echo "║  LMS Version:      $LMS_VERSION"
+    echo "║  SMARTPRESE V:     $SMARTPROESENSING_VERSION"
     echo "║  Compose File:     $COMPOSE_FILE"
     echo "║  Command:          $COMMAND"
     echo "╚════════════════════════════════════════════╝"

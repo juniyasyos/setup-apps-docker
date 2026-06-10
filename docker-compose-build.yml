@@ -99,3 +99,21 @@ services:
         BUILD_TIMESTAMP: "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
     image: lms-app:${LMS_VERSION:-latest}
     pull_policy: never
+
+
+  ####################################################################################################
+  # IAM Server Build Service
+  ####################################################################################################
+  smartpresensing-app:
+    build:
+      context: .
+      dockerfile: DockerNew/php/Dockerfile.smartpresensing-registry
+      args:
+        UID: "1000"
+        GID: "1000"
+        TZ: "Asia/Jakarta"
+        APP_ENV: "local"
+        APP_DIR: "smartpresensing"
+        BUILD_TIMESTAMP: "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+    image: smartpresensing-app:${SMARTPRESENSING_VERSION:-latest}
+    pull_policy: never
