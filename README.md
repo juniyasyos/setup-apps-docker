@@ -19,9 +19,9 @@
 
 ```
 rsch-apps/
-├── compose/          # Docker Compose manifests
-│   ├── base/         #   Infrastructure services
-│   ├── apps/         #   Application services
+├── compose/          # Docker Compose manifests (modular)
+│   ├── base/         #   Infrastructure + web services
+│   ├── apps/         #   Application per-app services
 │   ├── profiles/     #   Environment overrides
 │   └── build.yml     #   Build manifests
 ├── apps/             # Application definitions
@@ -37,7 +37,7 @@ rsch-apps/
 ├── scripts/          # Automation scripts
 ├── sources/          # Cloned repositories (gitignored)
 ├── storage/          # Persistent data (gitignored)
-├── compose.yml       # Main compose file
+├── compose.yml       # Main compose manifest (include web.yml)
 └── rsch              # CLI entrypoint
 ```
 

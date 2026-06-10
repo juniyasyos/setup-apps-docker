@@ -25,12 +25,13 @@
 rsch-apps/
 │
 ├── compose/                        # Definisi Docker Compose
-│   ├── base/                       #   Service infrastruktur
-│   │   ├── infra.yml               #     Aggregator (include semua)
+│   ├── base/                       #   Service infrastruktur + web
+│   │   ├── infra.yml               #     Aggregator infrastruktur
 │   │   ├── network.yml             #     Network + volume global
+│   │   ├── web.yml                 #     Nginx reverse proxy
 │   │   ├── database.yml            #     MySQL 8.0
 │   │   ├── minio.yml               #     Object Storage (S3)
-│   │   ├── phpmyadmin.yml          #     Database admin panel
+│   │   ├── phpmyadmin.yml          #     Database admin panel (profile dev)
 │   │   └── php-base.yml            #     Template PHP (app/worker/scheduler)
 │   ├── apps/                       #   Service aplikasi per-app
 │   │   ├── siimut.yml
