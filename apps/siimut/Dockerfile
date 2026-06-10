@@ -68,7 +68,7 @@ ENV COMPOSER_CACHE_DIR=/tmp/composer-cache \
 WORKDIR /build
 
 # Copy only composer files first (better caching)
-COPY sources/${APP_DIR}/composer.json sources/${APP_DIR}/composer.lock* ./
+COPY site/${APP_DIR}/composer.json site/${APP_DIR}/composer.lock* ./
 
 # Install composer dependencies with optimization
 RUN set -eux; \
@@ -83,7 +83,7 @@ RUN set -eux; \
     rm -rf "$COMPOSER_CACHE_DIR"
 
 # Copy entire application code
-COPY sources/${APP_DIR}/ ./
+COPY site/${APP_DIR}/ ./
 
 # Finalize: dump autoloader and optimize
 RUN set -eux; \

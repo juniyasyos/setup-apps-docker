@@ -146,7 +146,7 @@ list_apps() {
         echo "  Branch     : ${APP_BRANCHES[$i]}"
         echo "  Prod Env   : ${prod_label}"
         echo "  Local Deps : ${deps_label}"
-        echo "  Output Dir : sources/${APP_DIRS[$i]}"
+        echo "  Output Dir : site/${APP_DIRS[$i]}"
     done
     echo ""
     echo "── Cara Pakai ─────────────────────────────────────────────────────"
@@ -194,7 +194,7 @@ select_prepare_mode() {
 
     local choice
     while true; do
-        read -rp "  Pilihan [1-3]: " choice
+        read -rp "  Pilihan [1-3]: " choice </dev/tty
         case "${choice}" in
             1) PREPARE_MODE="dockerfile"; break ;;
             2) PREPARE_MODE="clone";      break ;;
@@ -260,7 +260,7 @@ prepare_app() {
     printf "  │  Desc   : %-47s│\n" "${APP_DESC:0:47}"
     printf "  │  Repo   : %-47s│\n" "${REPO_URL:0:47}"
     printf "  │  Branch : %-47s│\n" "${BRANCH}"
-    printf "  │  Target : %-47s│\n" "sources/${APP_DIR}"
+    printf "  │  Target : %-47s│\n" "site/${APP_DIR}"
     echo "  └─────────────────────────────────────────────────────────┘"
 
     # ── Pilih mode interaktif ─────────────────────────────────────────────────

@@ -665,7 +665,7 @@ ENV COMPOSER_CACHE_DIR=/tmp/composer-cache \
 
 WORKDIR /build
 
-COPY sources/\${APP_DIR}/composer.json sources/\${APP_DIR}/composer.lock* ./
+COPY site/\${APP_DIR}/composer.json site/\${APP_DIR}/composer.lock* ./
 
 RUN set -eux; \
     composer install \
@@ -678,7 +678,7 @@ RUN set -eux; \
       --classmap-authoritative; \
     rm -rf "\$COMPOSER_CACHE_DIR"
 
-COPY sources/\${APP_DIR}/ ./
+COPY site/\${APP_DIR}/ ./
 
 RUN set -eux; \
     composer dump-autoload --optimize --classmap-authoritative --no-scripts 2>/dev/null || true; \

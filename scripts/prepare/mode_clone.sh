@@ -14,13 +14,13 @@
 phase_git() {
     log_header "📁 Git: ${APP_NAME}"
 
-    local site_dir="${PROJECT_DIR}/sources/${APP_DIR}"
+    local site_dir="${PROJECT_DIR}/site/${APP_DIR}"
 
-    mkdir -p "${PROJECT_DIR}/sources"
+    mkdir -p "${PROJECT_DIR}/site"
 
     if [ -d "${site_dir}/.git" ]; then
         echo ""
-        echo -e "  ${YELLOW}⚠️  Repository sudah ada: sources/${APP_DIR}${NC}"
+        echo -e "  ${YELLOW}⚠️  Repository sudah ada: site/${APP_DIR}${NC}"
         echo ""
         echo "  Apa yang ingin dilakukan?"
         echo "  S) Skip  — abaikan, tidak pull"
@@ -30,7 +30,7 @@ phase_git() {
 
         local action
         while true; do
-            read -rp "  Pilihan [P/s/r]: " action
+            read -rp "  Pilihan [P/s/r]: " action </dev/tty
             action="${action:-P}"
             case "${action^^}" in
                 S)
@@ -86,9 +86,7 @@ phase_git() {
 # Phase 2 — Setup .env
 # ──────────────────────────────────────────────
 phase_env() {
-    local site_dir="${PROJECT_DIR}/sources/${APP_DIR}"
-
-    log_header "📋 .env: ${APP_NAME}"
+    local site_dir="${PROJECT_DIR}/site/${APP_DIR}"
 
     # IAM pakai template berbeda
     if [ "${APP_NAME}" = "iam" ]; then
@@ -113,7 +111,7 @@ phase_env() {
         echo ""
         local action
         while true; do
-            read -rp "  Pilihan [S/r]: " action
+            read -rp "  Pilihan [S/r]: " action </dev/tty
             action="${action:-S}"
             case "${action^^}" in
                 S) echo -e "  ${BLUE}ℹ️  .env dibiarkan.${NC}"; break ;;
@@ -150,7 +148,7 @@ phase_deps() {
         return 0
     fi
 
-    local site_dir="${PROJECT_DIR}/sources/${APP_DIR}"
+    local site_dir="${PROJECT_DIR}/site/${APP_DIR}"
     cd "${site_dir}"
 
     # Cek tools
@@ -240,7 +238,7 @@ phase_prod_env() {
         echo ""
         local action
         while true; do
-            read -rp "  Pilihan [S/r]: " action
+            read -rp "  Pilihan [S/r]: " action </dev/tty
             action="${action:-S}"
             case "${action^^}" in
                 S) echo -e "  ${BLUE}ℹ️  Production env dibiarkan.${NC}"; return 0 ;;
@@ -250,14 +248,27 @@ phase_prod_env() {
         done
     fi
 
-    if [ ! -f "${PROJECT_DIR}/apps/${APP_NAME}/.env.example" ]; then
-        log_error "Template tidak ditemukan: apps/${APP_NAME}/.env.example"
+    # Tentukan sumber template .env.example
+    # Priority: apps/{app}/.env.example → site/{app_dir}/.env.example → error
+    local template_file=""
+    if [ -f "${PROJECT_DIR}/apps/${APP_NAME}/.env.example" ]; then
+        template_file="${PROJECT_DIR}/apps/${APP_NAME}/.env.example"
+        echo "📋 Template: apps/${APP_NAME}/.env.example"
+    elif [ -f "${PROJECT_DIR}/site/${APP_DIR}/.env.example" ]; then
+        template_file="${PROJECT_DIR}/site/${APP_DIR}/.env.example"
+        log_warn "apps/${APP_NAME}/.env.example tidak ditemukan, menggunakan site/${APP_DIR}/.env.example sebagai fallback"
+    else
+        log_error "Template .env.example tidak ditemukan di:"
+        echo "  - apps/${APP_NAME}/.env.example"
+        echo "  - site/${APP_DIR}/.env.example"
+        echo ""
+        echo "  Buat salah satu file tersebut atau jalankan './rsch scaffold ${APP_NAME}' terlebih dahulu."
         exit 1
     fi
 
     mkdir -p "${PROJECT_DIR}/env"
     echo "📋 Membuat production env dari template..."
-    cp "${PROJECT_DIR}/apps/${APP_NAME}/.env.example" "${prod_env_file}"
+    cp "${template_file}" "${prod_env_file}"
 
     echo ""
     echo "🔧 Generating secrets..."
@@ -330,7 +341,7 @@ run_mode_clone() {
     echo "  ┌─────────────────────────────────────────────────────────┐"
     echo "  │ ✅  Clone & setup selesai!                              │"
     echo "  │                                                         │"
-    printf "  │  📁 sources/%-42s │\n" "${APP_DIR}"
+    printf "  │  📁 site/%-44s │\n" "${APP_DIR}"
     echo "  │                                                         │"
     echo "  │  Langkah selanjutnya:                                   │"
     echo "  │    ./rsch build ${APP_NAME}                             │"

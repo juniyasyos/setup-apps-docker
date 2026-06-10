@@ -23,7 +23,7 @@ select_framework() {
 
     local choice
     while true; do
-        read -rp "  Pilihan [1]: " choice
+        read -rp "  Pilihan [1]: " choice </dev/tty
         choice="${choice:-1}"
         case "$choice" in
             1) FRAMEWORK="laravel"; break ;;
@@ -56,7 +56,7 @@ generate_laravel_dockerfile() {
         echo ""
         local action
         while true; do
-            read -rp "  Pilihan [S/r]: " action
+            read -rp "  Pilihan [S/r]: " action </dev/tty
             action="${action:-S}"
             case "${action^^}" in
                 S) echo -e "  ${BLUE}ℹ️  Dockerfile dibiarkan, skip generate.${NC}"; return 0 ;;

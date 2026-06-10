@@ -65,8 +65,8 @@ WORKDIR /build
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-COPY sources/${APP_DIR}/composer.json sources/${APP_DIR}/composer.lock* ./
-COPY sources/${APP_DIR}/ .
+COPY site/${APP_DIR}/composer.json site/${APP_DIR}/composer.lock* ./
+COPY site/${APP_DIR}/ .
 RUN set -eux; \
     composer install \
       --no-dev \

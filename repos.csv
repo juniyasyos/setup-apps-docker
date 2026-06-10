@@ -5,3 +5,4 @@ siimut,siimut,https://github.com/juniyasyos/si-imut.git,main,yes,no,SIIMUT - Sis
 ikp,ikp,https://github.com/juniyasyos/ikp.git,main,no,no,IKP - Incident Reporting & Pelaporan Application
 iam,iam-server,https://github.com/juniyasyos/auth-server.git,main,yes,no,IAM Server - Authentication & SSO Server
 lms,lms-app,https://github.com/AryaAP23/LMS-CitraHusada,main,yes,no,Learning Management System berbasis Laravel yang dikustomisasi untuk kebutuhan internal institusi kesehatan
+pos,pos,https://github.com/juniyasyos/point-of-sales,main,yes,no,Point of Sales - Aplikasi kasir berbasis Laravel

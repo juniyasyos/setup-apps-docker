@@ -1,0 +1,12 @@
+# =============================================================================
+# .app-modes — App Prepare Mode Registry
+# =============================================================================
+# Format: <app_name>=<mode>:<value>
+#
+# Mode:
+#   image:<image:tag>   — menggunakan Docker image dari registry
+#   clone:<repo_url>    — clone repo & build dari source
+#   dockerfile:<stack>  — generate Dockerfile dari template
+#
+# File ini aman untuk di-commit (tidak mengandung secret).
+# =============================================================================

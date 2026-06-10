@@ -90,7 +90,8 @@ run_mode_image() {
         echo ""
         local action
         while true; do
-            read -rp "  Pilihan [K/u]: " action
+            action=""
+            read -rp "  Pilihan [K/u]: " action </dev/tty || action=""
             action="${action:-K}"
             case "${action^^}" in
                 K)
@@ -116,8 +117,9 @@ run_mode_image() {
     echo ""
 
     local image_ref
+    image_ref=""
     while true; do
-        read -rp "  Image [${APP_NAME}:latest]: " image_ref
+        read -rp "  Image [${APP_NAME}:latest]: " image_ref </dev/tty || image_ref=""
         image_ref="${image_ref:-${APP_NAME}:latest}"
 
         if validate_image_ref "${image_ref}"; then

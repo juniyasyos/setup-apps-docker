@@ -65,7 +65,7 @@ WORKDIR /build
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-COPY sources/${APP_DIR}/composer.json sources/${APP_DIR}/composer.lock* ./
+COPY site/${APP_DIR}/composer.json site/${APP_DIR}/composer.lock* ./
 RUN set -eux; \
     composer install \
       --prefer-dist \
@@ -75,7 +75,7 @@ RUN set -eux; \
       --no-scripts; \
     rm -rf "$COMPOSER_CACHE_DIR"
 
-COPY sources/${APP_DIR}/ .
+COPY site/${APP_DIR}/ .
 RUN set -eux; \
     composer dump-autoload --optimize --classmap-authoritative --no-scripts || true; \
     if [ -f .env ]; then \
