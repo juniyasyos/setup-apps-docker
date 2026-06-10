@@ -1,3 +1,9 @@
+# =============================================================================
+# TEMPLATE ONLY — Bukan Dockerfile aktif untuk build.
+# Digunakan sebagai referensi oleh: scripts/prepare/mode_dockerfile.sh
+# Dockerfile aktif per-app ada di: apps/<name>/Dockerfile
+# =============================================================================
+
 # =========================
 # Production-Only PHP-FPM Dockerfile (No Redis)
 # =========================

@@ -97,3 +97,6 @@ GRANT SELECT ON db_lms_citrahusada.* TO 'lms_readonly'@'%';
 --  Finalize Privileges
 -- =================================================
 FLUSH PRIVILEGES;
+
+-- =================================================
+

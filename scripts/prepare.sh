@@ -1,10 +1,11 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
 # =========================
 # Unified App Prepare Script
 # =========================
 # Reads app configuration from repos.txt and handles:
+#   - Interactive scaffolding for new apps
 #   - Git clone/pull
 #   - .env setup
 #   - Local dependency installation (optional)
@@ -17,10 +18,22 @@ set -e
 #   ./prepare.sh <app1> <app2>      # Prepare multiple apps
 #   ./prepare.sh all                # Prepare all apps
 #   ./prepare.sh <app> --no-deps    # Skip dependency install & npm build
+#
+# For NEW apps (not in repos.csv):
+#   ./prepare.sh <new-app>          # Interactive scaffolding then prepare
 # =========================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPOS_FILE="${SCRIPT_DIR}/../repos.csv"
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPOS_FILE="${PROJECT_DIR}/repos.csv"
+
+# ============================================
+# Source libraries
+# ============================================
+source "${SCRIPT_DIR}/scaffold.sh"
+source "${SCRIPT_DIR}/prepare/mode_dockerfile.sh"
+source "${SCRIPT_DIR}/prepare/mode_clone.sh"
+source "${SCRIPT_DIR}/prepare/mode_image.sh"
 
 # ============================================
 # Color & Log Helpers
@@ -30,7 +43,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 log_info()    { echo -e "${BLUE}ℹ️  $1${NC}"; }
 log_success() { echo -e "${GREEN}✅ $1${NC}"; }
@@ -41,14 +54,6 @@ log_header()  { echo -e "\n${CYAN}═══════════════�
 # ============================================
 # App Configuration from repos.csv
 # ============================================
-# Fields (comma-separated, no spaces around commas):
-#   app_name,app_dir,repo_url,branch,has_prod_env,has_local_deps,description
-#
-# Example:
-#   siimut,siimut,https://github.com/juniyasyos/si-imut.git,main,yes,yes,SIIMUT - Sistem Informasi Imunisasi
-#   ikp,ikp,https://github.com/juniyasyos/ikp.git,main,no,no,IKP - Incident Reporting & Pelaporan Application
-#   iam,iam-server,https://github.com/juniyasyos/auth-server.git,main,yes,no,IAM - Authentication & SSO Server
-
 APP_NAMES=()
 APP_DIRS=()
 APP_REPOS=()
@@ -79,6 +84,19 @@ load_all_apps() {
         APP_HAS_DEPS+=("$has_deps")
         APP_DESCS+=("$desc")
     done < "$REPOS_FILE"
+}
+
+# Check if app exists in repos.csv
+app_exists_in_repos() {
+    local target="$1"
+    load_all_apps
+
+    for i in "${!APP_NAMES[@]}"; do
+        if [ "${APP_NAMES[$i]}" = "$target" ]; then
+            return 0
+        fi
+    done
+    return 1
 }
 
 load_app_config() {
@@ -126,8 +144,8 @@ list_apps() {
         echo "  Description: ${APP_DESCS[$i]}"
         echo "  Git Repo   : ${APP_REPOS[$i]}"
         echo "  Branch     : ${APP_BRANCHES[$i]}"
-        echo "  Prod Env   : ${prod_label}  (generate .env.prod.${APP_NAMES[$i]} with secrets)"
-        echo "  Local Deps : ${deps_label}  (install PHP & Node deps on host)"
+        echo "  Prod Env   : ${prod_label}"
+        echo "  Local Deps : ${deps_label}"
         echo "  Output Dir : sources/${APP_DIRS[$i]}"
     done
     echo ""
@@ -135,315 +153,63 @@ list_apps() {
     echo "  ./prepare.sh                    — tampilkan daftar ini"
     echo "  ./prepare.sh siimut             — prepare app siimut"
     echo "  ./prepare.sh siimut ikp         — prepare beberapa app sekaligus"
-    echo "  ./prepare.sh all                — prepare semua app"
+    echo "  ./prepare.sh mynewapp           — scaffolding + prepare app baru"
     echo "  ./prepare.sh siimut --no-deps   — skip install dependencies"
     echo ""
 }
 
 # ============================================
-# Secret Generation Helpers
+# Interactive Mode Selection
 # ============================================
 
-generate_app_key() {
-    if command -v php &> /dev/null; then
-        echo "base64:$(php -r 'echo base64_encode(random_bytes(32));')"
-    else
-        echo "base64:$(openssl rand -base64 32 | tr -d '\n')"
+show_mode_menu() {
+    local app_name="$1"
+    local app_desc="$2"
+
+    echo ""
+    echo "  ╔══════════════════════════════════════════════════════════╗"
+    printf "  ║  📦 Prepare: %-44s║\n" "${app_name}"
+    if [ -n "${app_desc}" ]; then
+        # Potong deskripsi jika terlalu panjang
+        local short_desc="${app_desc:0:44}"
+        printf "  ║  %-56s║\n" "${short_desc}"
     fi
+    echo "  ╠══════════════════════════════════════════════════════════╣"
+    echo "  ║                                                          ║"
+    echo "  ║  Pilih mode setup:                                       ║"
+    echo "  ║                                                          ║"
+    echo "  ║   1) 🐳  Generate Dockerfile                             ║"
+    echo "  ║   2) 📦  Clone repo & build image                        ║"
+    echo "  ║   3) 🚀  Gunakan Docker image dari registry              ║"
+    echo "  ║                                                          ║"
+    echo "  ╚══════════════════════════════════════════════════════════╝"
+    echo ""
 }
 
-generate_db_password() {
-    openssl rand -base64 16 | tr -d '\n'
-}
+select_prepare_mode() {
+    local app_name="$1"
+    local app_desc="$2"
 
-generate_jwt_secret() {
-    openssl rand -hex 32
-}
+    show_mode_menu "${app_name}" "${app_desc}"
 
-generate_passport_keys() {
-    local priv_temp pub_temp
-
-    priv_temp=$(mktemp)
-    pub_temp=$(mktemp)
-
-    openssl genrsa -out "${priv_temp}" 2048 2>/dev/null
-    openssl rsa -in "${priv_temp}" -pubout -out "${pub_temp}" 2>/dev/null
-
-    # Read keys and escape for sed (single-line with trailing \)
-    PASSPORT_PRIVATE_KEY=$(cat "${priv_temp}" | sed 's/$/\\/' | tr -d '\n' | sed 's/\\$//')
-    PASSPORT_PUBLIC_KEY=$(cat "${pub_temp}" | sed 's/$/\\/' | tr -d '\n' | sed 's/\\$//')
-
-    rm -f "${priv_temp}" "${pub_temp}"
-}
-
-# ============================================
-# Phase 1 — Git Clone/Pull
-# ============================================
-
-phase_git() {
-    log_header "📁 Git: ${APP_NAME}"
-
-    local site_dir="${SCRIPT_DIR}/sources/${APP_DIR}"
-
-    # Create sources directory if not exists
-    if [ ! -d "${SCRIPT_DIR}/../sources" ]; then
-        echo "📁 Creating sources directory..."
-        mkdir -p "${SCRIPT_DIR}/../sources"
-    fi
-
-    if [ -d "${site_dir}/.git" ]; then
-        echo "🔄 Repository exists, pulling latest code from branch '${BRANCH}'..."
-        cd "${site_dir}"
-
-        # IKP-style branch-aware logic
-        git fetch origin
-        if git rev-parse --verify "origin/${BRANCH}" > /dev/null 2>&1; then
-            if git checkout "${BRANCH}" && git pull origin "${BRANCH}"; then
-                log_success "Git pull successful on branch '${BRANCH}'!"
-            else
-                log_error "Git pull failed! Check repository status."
-                exit 1
-            fi
-        else
-            echo "⚠️  Branch '${BRANCH}' not found on origin. Using default branch..."
-            if git pull origin; then
-                log_success "Git pull successful!"
-            else
-                log_error "Git pull failed! Check repository status."
-                exit 1
-            fi
-        fi
-        cd "${SCRIPT_DIR}"
-    else
-        echo "📥 Repository not found, cloning from ${REPO_URL}..."
-        if git clone -b "${BRANCH}" "${REPO_URL}" "${site_dir}" 2>/dev/null; then
-            log_success "Git clone successful!"
-        else
-            # Fallback: clone default branch
-            echo "⚠️  Branch '${BRANCH}' not available, cloning default branch..."
-            if git clone "${REPO_URL}" "${site_dir}"; then
-                log_success "Git clone successful (default branch)!"
-            else
-                log_error "Git clone failed! Check URL and network."
-                exit 1
-            fi
-        fi
-    fi
-
-    log_success "Git phase complete for ${APP_NAME}"
-}
-
-# ============================================
-# Phase 2 — Setup .env
-# ============================================
-
-phase_env() {
-    local site_dir="${SCRIPT_DIR}/sources/${APP_DIR}"
-
-    log_header "📋 .env: ${APP_NAME}"
-
-    # IAM doesn't have .env.example in the same pattern
-    if [ "${APP_NAME}" = "iam" ]; then
-        echo "⏭️  IAM uses apps/iam as template; skipping .env copy"
-        return 0
-    fi
-
-    if [ ! -f "${site_dir}/.env" ]; then
-        if [ -f "${site_dir}/.env.example" ]; then
-            echo "📋 Copying .env.example to .env..."
-            cp "${site_dir}/.env.example" "${site_dir}/.env"
-            log_success ".env file created. Please configure it as needed."
-        else
-            echo "⚠️  .env.example not found. Please create .env manually."
-        fi
-    else
-        log_success ".env file already exists."
-    fi
-}
-
-# ============================================
-# Phase 3 — Local Dependencies & Build
-# ============================================
-
-phase_deps() {
-    local no_deps="${1:-false}"
-
-    log_header "🔧 Dependencies: ${APP_NAME}"
-
-    if [ "${no_deps}" = "true" ]; then
-        echo "⏭️  Skipping dependency install per --no-deps flag"
-        return 0
-    fi
-
-    if [ "${HAS_LOCAL_DEPS}" != "yes" ]; then
-        echo "⏭️  App does not require local dependencies"
-        return 0
-    fi
-
-    local site_dir="${SCRIPT_DIR}/sources/${APP_DIR}"
-    cd "${site_dir}"
-
-    # Check required tools
-    local missing=0
-    for cmd in php composer node npm; do
-        if ! command -v "$cmd" &> /dev/null; then
-            log_error "$cmd not found. Please install it."
-            missing=1
-        fi
+    local choice
+    while true; do
+        read -rp "  Pilihan [1-3]: " choice
+        case "${choice}" in
+            1) PREPARE_MODE="dockerfile"; break ;;
+            2) PREPARE_MODE="clone";      break ;;
+            3) PREPARE_MODE="image";      break ;;
+            *) echo -e "  ${RED}❌ Pilihan tidak valid. Masukkan 1, 2, atau 3.${NC}" ;;
+        esac
     done
-    if [ "$missing" -eq 1 ]; then
-        log_error "Missing dependencies. Exiting."
-        exit 1
-    fi
-    log_success "Dependency tools OK"
-
-    # Composer install
-    if [ -f "composer.json" ]; then
-        echo "📦 Installing Composer dependencies..."
-        if composer install --no-interaction --optimize-autoloader; then
-            log_success "Composer install complete"
-        else
-            echo "⚠️  composer install failed (continuing)"
-        fi
-    else
-        echo "⚠️  composer.json not found, skipping Composer install"
-    fi
-
-    # npm install & build
-    if [ -f "package.json" ]; then
-        echo "📦 Installing npm dependencies..."
-        npm install
-        echo "🔨 Building frontend assets..."
-        npm run build
-        log_success "Frontend build complete"
-    else
-        echo "⚠️  package.json not found, skipping npm build"
-    fi
-
-    # Laravel-specific cache & publish
-    if [ -f "artisan" ]; then
-        echo "🔍 Laravel setup detected, running cache commands..."
-        php artisan config:cache --quiet || echo "⚠️  config:cache failed (continuing)"
-        php artisan route:cache --quiet || echo "⚠️  route:cache failed (continuing)"
-        php artisan view:cache --quiet || echo "⚠️  view:cache failed (continuing)"
-        echo "📦 Publishing Livewire assets..."
-        php artisan livewire:publish --assets --quiet || echo "⚠️  livewire:publish failed (continuing)"
-        log_success "Livewire assets published"
-    fi
-
-    cd "${SCRIPT_DIR}"
-    log_success "Dependency phase complete for ${APP_NAME}"
-}
-
-# ============================================
-# Phase 4 — Production Environment Generation
-# ============================================
-
-phase_prod_env() {
-    log_header "🔐 Production Env: ${APP_NAME}"
-
-    if [ "${HAS_PROD_ENV}" != "yes" ]; then
-        echo "⏭️  App does not require production env generation"
-        return 0
-    fi
-
-    local prod_env_file="${SCRIPT_DIR}/../env/.env.prod.${APP_NAME}"
-
-    # Check if production .env already exists
-    if [ -f "${prod_env_file}" ] && [ ! -t 0 ]; then
-        # Non-interactive mode: just skip
-        echo "⏭️  ${prod_env_file} already exists and not in interactive mode; skipping."
-        return 0
-    elif [ -f "${prod_env_file}" ]; then
-        echo "⚠️  ${prod_env_file} already exists."
-        read -p "Do you want to regenerate secrets? (y/N) " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            echo "⏭️  Skipping secret generation. Using existing ${prod_env_file}"
-            return 0
-        fi
-    fi
-
-    # Copy template
-    if [ ! -f "${SCRIPT_DIR}/../apps/${APP_NAME}/.env.example" ]; then
-        log_error "Template not found: apps/${APP_NAME}/.env.example"
-        exit 1
-    fi
-
-    echo "📋 Creating production env from template..."
-    cp "${SCRIPT_DIR}/../apps/${APP_NAME}/.env.example" "${prod_env_file}"
-    log_success "Copied apps/${APP_NAME}/.env.example → ${prod_env_file}"
 
     echo ""
-    echo "🔧 Generating secrets..."
-
-    # Generate APP_KEY
-    APP_KEY=$(generate_app_key)
-    echo "  ✓ APP_KEY generated"
-
-    # Generate DB passwords
-    DB_PASSWORD=$(generate_db_password)
-    echo "  ✓ DB_PASSWORD generated"
-    MYSQL_ROOT_PASSWORD=$(generate_db_password)
-    echo "  ✓ MYSQL_ROOT_PASSWORD generated"
-
-    # Temp file for safe replacement
-    local temp_file="${prod_env_file}.tmp"
-    cp "${prod_env_file}" "${temp_file}"
-
-    sed -i "s|^APP_KEY=.*|APP_KEY=${APP_KEY}|" "${temp_file}"
-    sed -i "s|^MYSQL_PASSWORD=.*|MYSQL_PASSWORD=${DB_PASSWORD}|" "${temp_file}"
-    sed -i "s|^MYSQL_ROOT_PASSWORD=.*|MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}|" "${temp_file}"
-
-    # App-specific secrets
-    case "${APP_NAME}" in
-        iam)
-            # JWT secret
-            IAM_JWT_SECRET=$(generate_jwt_secret)
-            echo "  ✓ IAM_JWT_SECRET generated"
-            sed -i "s|^IAM_JWT_SECRET=.*|IAM_JWT_SECRET=${IAM_JWT_SECRET}|" "${temp_file}"
-
-            # Passport RSA keys
-            echo "  ⏳ Generating Passport RSA keys (this may take a moment)..."
-            generate_passport_keys
-
-            # Delete old passport key blocks, then append new keys
-            sed -i '/^PASSPORT_PRIVATE_KEY=/,/^-----END PRIVATE KEY-----/d' "${temp_file}"
-            sed -i '/^PASSPORT_PUBLIC_KEY=/,/^-----END PUBLIC KEY-----/d' "${temp_file}"
-            # Append new keys at the end of file
-            {
-              echo ""
-              echo "PASSPORT_PRIVATE_KEY=\"${PASSPORT_PRIVATE_KEY}\""
-              echo "PASSPORT_PUBLIC_KEY=\"${PASSPORT_PUBLIC_KEY}\""
-            } >> "${temp_file}"
-            echo "  ✓ Passport RSA keys generated"
-            ;;
-
-        siimut)
-            # Sync IAM_JWT_SECRET from IAM's prod env if available
-            if [ -f "${SCRIPT_DIR}/../env/.env.prod.iam" ]; then
-                local jwt
-                jwt=$(grep '^IAM_JWT_SECRET=' "${SCRIPT_DIR}/../env/.env.prod.iam" | cut -d '=' -f 2)
-                if [ -n "$jwt" ]; then
-                    IAM_JWT_SECRET="$jwt"
-                    echo "  ✓ IAM_JWT_SECRET synced from env/.env.prod.iam"
-                else
-                    IAM_JWT_SECRET=$(generate_jwt_secret)
-                    echo "  ⚠️  Could not parse IAM_JWT_SECRET from .env.prod.iam, generated new one"
-                fi
-            else
-                IAM_JWT_SECRET=$(generate_jwt_secret)
-                echo "  ⚠️  env/.env.prod.iam not found, generating new IAM_JWT_SECRET"
-                echo "      (Recommend running ./prepare.sh iam first!)"
-            fi
-            sed -i "s|^IAM_JWT_SECRET=.*|IAM_JWT_SECRET=${IAM_JWT_SECRET}|" "${temp_file}"
-            ;;
+    case "${PREPARE_MODE}" in
+        dockerfile) echo -e "  ${CYAN}▶ Mode: Generate Dockerfile${NC}" ;;
+        clone)      echo -e "  ${CYAN}▶ Mode: Clone repo & build image${NC}" ;;
+        image)      echo -e "  ${CYAN}▶ Mode: Gunakan Docker image${NC}" ;;
     esac
-
-    mv "${temp_file}" "${prod_env_file}"
-    log_success "Secrets updated in ${prod_env_file}"
     echo ""
-    echo "⚠️  IMPORTANT: This file is in .gitignore - DO NOT commit!"
 }
 
 # ============================================
@@ -454,34 +220,72 @@ prepare_app() {
     local target="$1"
     local no_deps="${2:-false}"
 
-    if ! load_app_config "$target"; then
-        log_error "App '${target}' tidak dikenal!"
+    # ── Cek apakah app baru (belum di repos.csv) ─────────────────────────────
+    if ! app_exists_in_repos "$target"; then
+        log_header "🚀 App Baru: ${target} (belum terdaftar di repos.csv)"
         echo ""
-        echo "App yang tersedia:"
-        for i in "${!APP_NAMES[@]}"; do
-            echo "  • ${APP_NAMES[$i]} — ${APP_DESCS[$i]}"
-        done
+        echo "App '${target}' belum ada di repositori. Akan dilakukan scaffolding interaktif..."
         echo ""
-        echo "Coba: ./prepare.sh list"
-        exit 1
+
+        scaffold_interactive "$target"
+
+        echo ""
+        echo "┌─────────────────────────────────────────────────────────────┐"
+        echo "│ ✅ Scaffolding selesai!                                    │"
+        echo "│    Sekarang lanjut ke fase prepare...                      │"
+        echo "└─────────────────────────────────────────────────────────────┘"
+
+        if ! load_app_config "$target"; then
+            log_error "Gagal load konfigurasi '${target}' setelah scaffold. Cek repos.csv."
+            exit 1
+        fi
+    else
+        if ! load_app_config "$target"; then
+            log_error "App '${target}' tidak dikenal!"
+            echo ""
+            echo "App yang tersedia:"
+            for i in "${!APP_NAMES[@]}"; do
+                echo "  • ${APP_NAMES[$i]} — ${APP_DESCS[$i]}"
+            done
+            echo ""
+            echo "Coba: ./prepare.sh list"
+            exit 1
+        fi
     fi
 
+    # ── Info box app ──────────────────────────────────────────────────────────
     echo ""
-    echo "┌─────────────────────────────────────────────────────────────┐"
-    echo "│ 📦 ${APP_NAME} — ${APP_DESC}"
-    echo "├─────────────────────────────────────────────────────────────┤"
-    echo "│ Repo : ${REPO_URL}"
-    echo "│ Cabang : ${BRANCH}"
-    echo "│ Tujuan : sources/${APP_DIR}"
-    echo "└─────────────────────────────────────────────────────────────┘"
+    echo "  ┌─────────────────────────────────────────────────────────┐"
+    printf "  │  App    : %-47s│\n" "${APP_NAME}"
+    printf "  │  Desc   : %-47s│\n" "${APP_DESC:0:47}"
+    printf "  │  Repo   : %-47s│\n" "${REPO_URL:0:47}"
+    printf "  │  Branch : %-47s│\n" "${BRANCH}"
+    printf "  │  Target : %-47s│\n" "sources/${APP_DIR}"
+    echo "  └─────────────────────────────────────────────────────────┘"
 
-    phase_git
-    phase_env
-    phase_deps "${no_deps}"
-    phase_prod_env
+    # ── Pilih mode interaktif ─────────────────────────────────────────────────
+    local PREPARE_MODE=""
+    select_prepare_mode "${APP_NAME}" "${APP_DESC}"
+
+    # ── Jalankan mode yang dipilih ────────────────────────────────────────────
+    case "${PREPARE_MODE}" in
+        dockerfile)
+            run_mode_dockerfile
+            ;;
+        clone)
+            run_mode_clone "${no_deps}"
+            ;;
+        image)
+            run_mode_image
+            ;;
+        *)
+            log_error "Mode tidak dikenal: ${PREPARE_MODE}"
+            exit 1
+            ;;
+    esac
 
     echo ""
-    log_success "✅ ${APP_NAME} prepared successfully!"
+    log_success "${APP_NAME} prepare selesai! (mode: ${PREPARE_MODE})"
 }
 
 # ============================================
@@ -521,7 +325,11 @@ main() {
     fi
 
     # Run prepare for each app
+    local any_new=false
     for app in "${apps[@]}"; do
+        if ! app_exists_in_repos "$app"; then
+            any_new=true
+        fi
         prepare_app "$app" "$no_deps"
     done
 
@@ -533,10 +341,10 @@ main() {
 
     # Show next steps hint
     echo "Langkah selanjutnya:"
-    if [ -f "${SCRIPT_DIR}/../scripts/build.sh" ]; then
+    if [ -f "${PROJECT_DIR}/scripts/build.sh" ]; then
         echo "  • Build Docker images:  ./scripts/build.sh [app]"
     fi
-    if ls "${SCRIPT_DIR}"/env/.env.prod.* 1>/dev/null 2>&1; then
+    if ls "${PROJECT_DIR}"/env/.env.prod.* 1>/dev/null 2>&1; then
         echo "  • File production .env sudah dibuat di folder env/ (JANGAN di-commit!)"
     fi
     echo ""

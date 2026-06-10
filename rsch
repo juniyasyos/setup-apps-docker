@@ -8,6 +8,7 @@ set -euo pipefail
 #
 # Usage:
 #   ./rsch prepare <app>     Clone, setup env, install deps
+#   ./rsch scaffold <app>    Generate all files for a new app
 #   ./rsch build <app>       Build Docker image
 #   ./rsch up [--dev|--prod] Start all services
 #   ./rsch down [--dev|--prod] Stop all services
@@ -47,6 +48,7 @@ COMMANDS:
   Application Lifecycle:
     prepare <app>       Clone repo, setup .env, install dependencies
     prepare all         Prepare all apps
+    scaffold <app>      Generate all files for a new app
     list                List available applications
 
   Build & Deploy:
@@ -71,6 +73,7 @@ COMMANDS:
 
 EXAMPLES:
     ./rsch prepare siimut
+    ./rsch scaffold myapp
     ./rsch build lms push
     ./rsch up --prod
     ./rsch logs siimut
@@ -93,6 +96,17 @@ cmd_prepare() {
         return
     fi
     "${SCRIPT_DIR}/scripts/prepare.sh" "$@"
+}
+
+# ──────────────────────────────────────────────
+# Scaffold
+# ──────────────────────────────────────────────
+cmd_scaffold() {
+    if [ $# -eq 0 ]; then
+        "${SCRIPT_DIR}/scripts/scaffold.sh" --help
+        return
+    fi
+    "${SCRIPT_DIR}/scripts/scaffold.sh" "$@"
 }
 
 # ──────────────────────────────────────────────
@@ -215,6 +229,7 @@ shift || true
 
 case "$COMMAND" in
     prepare)    cmd_prepare "$@" ;;
+    scaffold)   cmd_scaffold "$@" ;;
     build)      cmd_build "$@" ;;
     up)         cmd_up "$@" ;;
     down)       cmd_down "$@" ;;

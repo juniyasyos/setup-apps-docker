@@ -1,27 +1,42 @@
 # Nginx Web Server — Multi-App Reverse Proxy
 # Serves all Laravel applications on their respective ports.
+#
+# ╔══════════════════════════════════════════════════════════╗
+# ║  App Registry                                           ║
+# ║  Add new app here: name + port + volume paths           ║
+# ║  Then add its port/volume entries in x-web-* below      ║
+# ╚══════════════════════════════════════════════════════════╝
+x-apps: &apps
+  siimut: { port: 8000 }
+  ikp:    { port: 8200 }
+  iam:    { port: 8100 }
+  lms:    { port: 7000 }
+
+x-web-ports: &web-ports
+  - "${SIIMUT_HOST_PORT:-8000}:8000"
+  - "${IKP_HOST_PORT:-8200}:8200"
+  - "${IAM_HOST_PORT:-8100}:8100"
+  - "${LMS_HOST_PORT:-7000}:7000"
+
+x-web-volumes: &web-volumes
+  - ../../docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+  - ../../docker/nginx/nginx-multi-apps.conf:/etc/nginx/conf.d/default.conf:ro
+  # Application public/storage mounts (read-only)
+  - siimut_public:/var/www/siimut/public:ro
+  - siimut_storage:/var/www/siimut/storage:ro
+  - ikp_public:/var/www/ikp/public:ro
+  - ikp_storage:/var/www/ikp/storage:ro
+  - lms_public:/var/www/lms-app/public:ro
+  - lms_storage:/var/www/lms-app/storage:ro
+  - iam_public:/var/www/iam/public:ro
+  - nginx_logs:/var/log/nginx
 
 services:
   web:
     image: nginx:alpine
     container_name: ${STACK_NAME:-multi}-web
-    ports:
-      - "${SIIMUT_HOST_PORT:-8000}:8000"
-      - "${IKP_HOST_PORT:-8200}:8200"
-      - "${IAM_HOST_PORT:-8100}:8100"
-      - "${LMS_HOST_PORT:-7000}:7000"
-    volumes:
-      - ../../docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ../../docker/nginx/nginx-multi-apps.conf:/etc/nginx/conf.d/default.conf:ro
-      # Application public/storage mounts (read-only)
-      - siimut_public:/var/www/siimut/public:ro
-      - siimut_storage:/var/www/siimut/storage:ro
-      - ikp_public:/var/www/ikp/public:ro
-      - ikp_storage:/var/www/ikp/storage:ro
-      - lms_public:/var/www/lms-app/public:ro
-      - lms_storage:/var/www/lms-app/storage:ro
-      - iam_public:/var/www/iam/public:ro
-      - nginx_logs:/var/log/nginx
+    ports: *web-ports
+    volumes: *web-volumes
     restart: unless-stopped
     deploy:
       resources:
