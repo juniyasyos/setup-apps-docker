@@ -4,8 +4,7 @@ services:
   phpmyadmin:
     image: phpmyadmin/phpmyadmin:latest
     restart: unless-stopped
-    profiles:
-      - dev
+
     ports:
       - "${PMA_PORT:-8888}:80"
     environment:

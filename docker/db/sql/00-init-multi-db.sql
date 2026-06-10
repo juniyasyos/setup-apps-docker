@@ -100,3 +100,21 @@ FLUSH PRIVILEGES;
 
 -- =================================================
 
+
+-- =================================================
+--  lms Database
+-- =================================================
+CREATE DATABASE IF NOT EXISTS lms_db
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+
+CREATE USER IF NOT EXISTS 'lms_user'@'%'
+  IDENTIFIED BY 'lms_pass123';
+
+GRANT ALL PRIVILEGES
+  ON lms_db.* TO 'lms_user'@'%';
+
+CREATE USER IF NOT EXISTS 'lms_user_readonly'@'%'
+  IDENTIFIED BY 'lms@ReadOnly2025!';
+
+GRANT SELECT ON lms_db.* TO 'lms_user_readonly'@'%';

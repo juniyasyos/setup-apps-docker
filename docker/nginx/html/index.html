@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal Aplikasi — Rumah Sakit Citra Husada</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #070b14;
+            --surface: rgba(17, 24, 39, 0.6);
+            --border: rgba(255,255,255,0.06);
+            --primary: #3b82f6;
+            --primary-dim: rgba(59,130,246,0.1);
+            --text: #f3f4f6;
+            --text-muted: #9ca3af;
+            --green: #10b981;
+            --amber: #f59e0b;
+            --red: #ef4444;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Background glow */
+        body::before, body::after {
+            content: '';
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(180px);
+            pointer-events: none;
+        }
+        body::before {
+            width: 400px; height: 400px;
+            background: var(--primary);
+            opacity: 0.08;
+            top: -100px; left: -100px;
+        }
+        body::after {
+            width: 500px; height: 500px;
+            background: var(--green);
+            opacity: 0.06;
+            bottom: -150px; right: -150px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 820px;
+            position: relative;
+            z-index: 10;
+            animation: fadeUp 0.7s ease-out;
+        }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(24px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 48px;
+        }
+
+        .brand-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 72px;
+            height: 72px;
+            background: var(--primary-dim);
+            border: 1px solid rgba(59,130,246,0.15);
+            border-radius: 20px;
+            font-size: 34px;
+            margin-bottom: 20px;
+            animation: pulse 4s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 15px rgba(59,130,246,0.1); }
+            50%      { box-shadow: 0 0 35px rgba(59,130,246,0.25); }
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #fff 40%, #93c5fd 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            font-size: 15px;
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+
+        /* App Grid */
+        .app-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 48px;
+        }
+
+        .app-card {
+            display: flex;
+            flex-direction: column;
+            padding: 24px 20px 20px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            backdrop-filter: blur(12px);
+            text-decoration: none;
+            color: inherit;
+            transition: all 0.25s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .app-card:hover {
+            border-color: rgba(59,130,246,0.3);
+            transform: translateY(-3px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+        }
+
+        .app-card:active {
+            transform: translateY(-1px);
+        }
+
+        .app-icon {
+            font-size: 28px;
+            margin-bottom: 12px;
+        }
+
+        .app-name {
+            font-size: 17px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .app-desc {
+            font-size: 13px;
+            color: var(--text-muted);
+            line-height: 1.5;
+            flex: 1;
+        }
+
+        .app-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 14px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            font-size: 12px;
+        }
+
+        .app-port {
+            color: var(--text-muted);
+            font-family: 'SF Mono', 'Fira Code', monospace;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-weight: 600;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .status-dot.online {
+            background: var(--green);
+            box-shadow: 0 0 6px rgba(16,185,129,0.5);
+        }
+
+        .status-dot.offline {
+            background: var(--amber);
+            box-shadow: 0 0 6px rgba(245,158,11,0.4);
+        }
+
+        .status-badge.online  { color: var(--green); }
+        .status-badge.offline { color: var(--amber); }
+
+        /* Server Info */
+        .server-info {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 24px 48px;
+            padding: 20px 28px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            backdrop-filter: blur(12px);
+            text-align: center;
+        }
+
+        .server-info-item {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .server-info-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--text-muted);
+            opacity: 0.7;
+        }
+
+        .server-info-value {
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .footer {
+            margin-top: 32px;
+            text-align: center;
+            font-size: 12px;
+            color: rgba(156,163,175,0.4);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="brand-icon">🏥</div>
+            <h1>Portal Aplikasi Internal</h1>
+            <p>Rumah Sakit Citra Husada — Sistem Informasi Manajemen Terpadu</p>
+        </div>
+
+        <div class="app-grid">
+            <a href="//{{HOST}}:8000" class="app-card">
+                <div class="app-icon">📋</div>
+                <div class="app-name">SIIMUT</div>
+                <div class="app-desc">Sistem Informasi Ibu &amp; Anak Terpadu — data ibu hamil, imunisasi, dan tumbuh kembang balita.</div>
+                <div class="app-meta">
+                    <span class="app-port">Port 8000</span>
+                    <span class="status-badge offline">
+                        <span class="status-dot offline"></span>
+                        <span id="status-siimut">Memuat…</span>
+                    </span>
+                </div>
+            </a>
+
+            <a href="//{{HOST}}:8200" class="app-card">
+                <div class="app-icon">🏭</div>
+                <div class="app-name">IKP</div>
+                <div class="app-desc">Industri Kecil &amp; Potensial — monitoring usaha kecil dan potensi ekonomi wilayah.</div>
+                <div class="app-meta">
+                    <span class="app-port">Port 8200</span>
+                    <span class="status-badge offline">
+                        <span class="status-dot offline"></span>
+                        <span id="status-ikp">Memuat…</span>
+                    </span>
+                </div>
+            </a>
+
+            <a href="//{{HOST}}:8100" class="app-card">
+                <div class="app-icon">🔐</div>
+                <div class="app-name">IAM SSO</div>
+                <div class="app-desc">Identity &amp; Access Management — autentikasi terpusat untuk seluruh aplikasi internal.</div>
+                <div class="app-meta">
+                    <span class="app-port">Port 8100</span>
+                    <span class="status-badge offline">
+                        <span class="status-dot offline"></span>
+                        <span id="status-iam">Memuat…</span>
+                    </span>
+                </div>
+            </a>
+
+            <a href="//{{HOST}}:8080" class="app-card">
+                <div class="app-icon">🎓</div>
+                <div class="app-name">LMS</div>
+                <div class="app-desc">Learning Management System — platform pelatihan dan pengembangan SDM berbasis web.</div>
+                <div class="app-meta">
+                    <span class="app-port">Port 8080</span>
+                    <span class="status-badge offline">
+                        <span class="status-dot offline"></span>
+                        <span id="status-lms">Memuat…</span>
+                    </span>
+                </div>
+            </a>
+        </div>
+
+        <div class="server-info">
+            <div class="server-info-item">
+                <span class="server-info-label">Host</span>
+                <span class="server-info-value">RS Citra Husada Internal</span>
+            </div>
+            <div class="server-info-item">
+                <span class="server-info-label">Platform</span>
+                <span class="server-info-value">Docker Compose · Nginx</span>
+            </div>
+            <div class="server-info-item">
+                <span class="server-info-label">Status</span>
+                <span class="server-info-value" style="color: var(--amber);">🟡 Terbatas</span>
+            </div>
+        </div>
+
+        <div class="footer">
+            &copy; 2026 IT Rumah Sakit Citra Husada &mdash; Portal monitoring hanya tersedia di jaringan internal.
+        </div>
+    </div>
+
+    <script>
+    // Real-time health check per app
+    const APPS = [
+        { id: 'siimut', port: 8000  },
+        { id: 'ikp',    port: 8200  },
+        { id: 'iam',    port: 8100  },
+        { id: 'lms',    port: 8080  },
+    ];
+
+    async function checkHealth(app) {
+        const badge = document.getElementById(`status-${app.id}`);
+        const card  = badge?.closest?.('.status-badge') ?? badge?.parentElement;
+        try {
+            const res = await fetch(`//${location.hostname}:${app.port}/health`, {
+                method: 'GET',
+                mode: 'no-cors',
+                signal: AbortSignal.timeout(3000),
+            });
+            if (card) {
+                card.className = 'status-badge online';
+                card.querySelector('.status-dot').className = 'status-dot online';
+            }
+            if (badge) badge.textContent = 'Online';
+        } catch {
+            if (card) {
+                card.className = 'status-badge offline';
+                card.querySelector('.status-dot').className = 'status-dot offline';
+            }
+            if (badge) badge.textContent = 'Offline';
+        }
+    }
+
+    // Check all apps on load
+    APPS.forEach(a => checkHealth(a));
+
+    // Re-check every 30 seconds
+    setInterval(() => APPS.forEach(a => checkHealth(a)), 30000);
+    </script>
+</body>
+</html>

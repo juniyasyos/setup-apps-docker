@@ -15,7 +15,6 @@ services:
       - ../../env/common.env
     environment:
       MYSQL_ROOT_PASSWORD: rootpass123
-      MYSQL_RANDOM_ROOT_PASSWORD: "no"
       MYSQL_CHARSET: utf8mb4
       MYSQL_COLLATION: utf8mb4_unicode_ci
       MYSQL_INIT_CONNECT: "SET SESSION sql_mode=''"

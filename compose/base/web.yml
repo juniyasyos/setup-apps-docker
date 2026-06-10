@@ -10,13 +10,12 @@ x-apps: &apps
   siimut: { port: 8000 }
   ikp:    { port: 8200 }
   iam:    { port: 8100 }
-  lms:    { port: 7000 }
 
 x-web-ports: &web-ports
+  - "${WEB_PORTAL_PORT:-80}:3000"
   - "${SIIMUT_HOST_PORT:-8000}:8000"
   - "${IKP_HOST_PORT:-8200}:8200"
   - "${IAM_HOST_PORT:-8100}:8100"
-  - "${LMS_HOST_PORT:-7000}:7000"
 
 x-web-volumes: &web-volumes
   - ../../docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
@@ -27,8 +26,6 @@ x-web-volumes: &web-volumes
   - siimut_storage:/var/www/siimut/storage:ro
   - ikp_public:/var/www/ikp/public:ro
   - ikp_storage:/var/www/ikp/storage:ro
-  - lms_public:/var/www/lms-app/public:ro
-  - lms_storage:/var/www/lms-app/storage:ro
   - iam_public:/var/www/iam/public:ro
   - nginx_logs:/var/log/nginx
 
@@ -57,3 +54,13 @@ services:
 volumes:
   nginx_logs:
     driver: local
+  siimut_public:
+    external: true
+  siimut_storage:
+    external: true
+  ikp_public:
+    external: true
+  ikp_storage:
+    external: true
+  iam_public:
+    external: true
