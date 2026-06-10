@@ -355,8 +355,8 @@ run_mode_dockerfile() {
     [ -z "$db_password" ] && db_password="${APP_NAME}_pass123"
     [ -z "$port" ] && port="8080"
     [ -z "$domain" ] && domain="${APP_NAME}.local"
-    [ -z "$queue" ] && queue="false"
-    [ -z "$scheduler" ] && scheduler="false"
+    [ -z "$queue" ] && queue="true"
+    [ -z "$scheduler" ] && scheduler="true"
     [ -z "$version" ] && version="latest"
     [ -z "$image" ] && image="juniyasyos/${APP_NAME}"
 
