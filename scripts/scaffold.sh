@@ -866,20 +866,13 @@ append_repos_csv() {
 # ============================================
 append_nginx_conf() {
     local name="$1" source_dir="$2" port="$3" desc="$4"
-    local target="${PROJECT_DIR}/docker/nginx/nginx-multi-apps.conf"
+    local target="${PROJECT_DIR}/docker/nginx/conf.d/${name}.conf"
 
-    log_info "  docker/nginx/nginx-multi-apps.conf"
+    log_info "  docker/nginx/conf.d/${name}.conf"
 
-    # Find where to insert — before the last closing lines, or append to end
-    # We'll insert right before the final blank server block markers
-    # First remove the trailing empty server blocks if they exist
-    sed -i '/^# =========================$/,/^}$/d' "$target" 2>/dev/null || true
+    mkdir -p "$(dirname "$target")"
 
-    # Remove trailing blank lines
-    sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' "$target" 2>/dev/null || true
-
-    cat >> "$target" << NGINXEOF
-
+    cat > "$target" << NGINXEOF
 # =========================
 # ${desc} (Port ${port})
 # =========================
@@ -902,6 +895,13 @@ server {
 
     if (\$request_method = 'OPTIONS') {
         return 204;
+    }
+
+    # Catch 502/503/504 and route to maintenance page
+    error_page 502 503 504 /maintenance.html;
+    location = /maintenance.html {
+        root /usr/share/nginx/html;
+        internal;
     }
 
     location /health {
@@ -931,9 +931,11 @@ server {
     }
 
     location ~ \\.php\$ {
+        resolver 127.0.0.11 valid=30s;
+        set \$upstream_app app-${name};
         try_files \$uri =404;
         fastcgi_split_path_info ^(.+\\.php)(/.+)\$;
-        fastcgi_pass app-${name}:9000;
+        fastcgi_pass \$upstream_app:9000;
         fastcgi_read_timeout 3600;
         fastcgi_index index.php;
         include fastcgi_params;
@@ -959,7 +961,7 @@ server {
 }
 NGINXEOF
 
-    log_success "  Server block appended to nginx-multi-apps.conf"
+    log_success "  Modular Nginx configuration created"
 }
 
 # ============================================
