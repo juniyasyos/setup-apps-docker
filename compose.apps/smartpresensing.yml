@@ -11,6 +11,7 @@ services:
     env_file:
       - ../env/.env.smartpresensing
     environment:
+      APP_KEY: base64:+DVLUBvxTs6z4u/fEFfrxV1Z8SJG255jLclgP5Vvm8M=
       APP_ENV: production
       APP_DEBUG: "true"
       APP_WORKDIR: /var/www/smartpresensing-app
