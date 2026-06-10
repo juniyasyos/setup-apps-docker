@@ -1,9 +1,0 @@
-# Placeholder untuk direktori session phpMyAdmin
-# File ini memastikan direktori sessions tetap ada di git
-# tapi isi session yang sensitif tidak ikut ter-commit
-
-# Session files yang akan di-ignore:
-# - sess_*
-# - Semua session data phpMyAdmin
-
-# Direktori ini akan berisi session files saat container berjalan

@@ -149,3 +149,6 @@ temp/
 .Trashes
 ehthumbs.db
 Thumbs.dbstorage/*
+
+# Vibe Code
+.claude/
