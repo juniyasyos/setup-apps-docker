@@ -58,16 +58,9 @@ volumes:
   nginx_logs:
     driver: local
   siimut_public:
-    external: true
   siimut_storage:
-    external: true
   ikp_public:
-    external: true
   ikp_storage:
-    external: true
   iam_public:
-    external: true
   lms_public:
-    external: true
   lms_storage:
-    external: true
