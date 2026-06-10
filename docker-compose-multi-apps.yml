@@ -11,7 +11,8 @@ services:
       # - "${SIIMUT_HOST_PORT:-8000}:8000"  # SIIMUT
       # - "${IKP_HOST_PORT:-8200}:8200"  # IKP
       # - "${IAM_HOST_PORT:-8100}:8100"  # IAM Server
-      - "${LMS_HOST_PORT:-7000}:7000"  # LMS Server
+      # - "${LMS_HOST_PORT:-7000}:7000"  # LMS Server
+      - "${LMS_HOST_PORT:-7100}:7100"  # LMS Server
     volumes:
       - ./DockerNew/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./DockerNew/nginx/nginx-multi-apps.conf:/etc/nginx/conf.d/default.conf:ro
@@ -24,6 +25,9 @@ services:
       # LMS
       - lms_public:/var/www/lms-app/public:ro
       - lms_storage:/var/www/lms-app/storage:ro
+      # SMARTPRESENSING
+      - smartpresensing_public:/var/www/smartpresensing-app/public:ro
+      - smartpresensing_storage:/var/www/smartpresensing-app/storage:ro
       # # IAM
       - iam_public:/var/www/iam/public:ro
       - nginx_logs:/var/log/nginx
@@ -127,6 +131,24 @@ services:
       file: compose.apps/lms.yml
       service: scheduler
 
+  ####################################################################################################
+  # Apps SMARTPRESENSING
+  ####################################################################################################
+  app-smartpresensing:
+    extends:
+      file: compose.apps/smartpresensing.yml
+      service: app
+
+  queue-smartpresensing:
+    extends:
+      file: compose.apps/smartpresensing.yml
+      service: queue  
+
+  scheduler-smartpresensing:
+    extends:
+      file: compose.apps/smartpresensing.yml
+      service: scheduler
+
   ###################################################################################################
   ###################################################################################################
   # End Section: Apps - Production Application
@@ -149,6 +171,8 @@ volumes:
   iam_public:
     driver: local
   lms_public:
+    driver: local
+  smartpresensing_public:
     driver: local
 
   # ====== DATA PERSISTEN LARAVEL (tanpa vendor) ======
@@ -174,6 +198,12 @@ volumes:
   lms_storage:
     driver: local
   lms_bootstrap_cache:
+    driver: local
+
+  # # SMARTPRESENCE
+  smartpresensing_storage:
+    driver: local
+  smartpresensing_bootstrap_cache:
     driver: local
 
 ####################################################################################################

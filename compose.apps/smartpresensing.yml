@@ -1,0 +1,104 @@
+name: service-smartpresensing
+
+services:
+  app:
+    extends:
+      file: ../compose.common.yml
+      service: php-app-base
+    image: smartpresensing-app:v1.0.0
+    container_name: smartpresensing-app
+    working_dir: /var/www/smartpresensing-app
+    env_file:
+      - ../env/.env.smartpresensing
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "true"
+      APP_WORKDIR: /var/www/smartpresensing-app
+      PUBLIC_VOLUME: /var/www/smartpresensing-app/public
+      APP_URL: "http://192.168.1.9:7100"
+      TRUSTED_PROXIES: "*"
+      DB_HOST: database-service
+      DB_USERNAME: smartprese-user
+      DB_PASSWORD: smartpresen-password
+      DB_DATABASE: smartpresence
+    volumes:
+      - smartpresensing_storage:/var/www/smartpresensing-app/storage
+      - smartpresensing_bootstrap_cache:/var/www/smartpresensing-app/bootstrap/cache
+      - smartpresensing_public:/var/www/smartpresensing-app/public
+    security_opt:
+      - seccomp:unconfined
+    cap_add:
+      - SYS_ADMIN
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1"
+        reservations:
+          memory: 512M
+          cpus: "0.5"
+
+  queue:
+    extends:
+      file: ../compose.common.yml
+      service: php-worker-base
+    image: smartpresensing-app:v1.0.0
+    container_name: smartpresensing-queue
+    working_dir: /var/www/smartpresensing-app
+    env_file:
+      - ../env/.env.smartpresensing
+    environment:
+      APP_URL: "http://192.168.1.9:7100"
+      DB_HOST: database-service
+      DB_USERNAME: smartprese-user
+      DB_PASSWORD: smartpresen-password
+      DB_DATABASE: smartpresence
+    volumes:
+      - smartpresensing_storage:/var/www/smartpresensing-app/storage
+      - smartpresensing_bootstrap_cache:/var/www/smartpresensing-app/bootstrap/cache
+      - smartpresensing_public:/var/www/smartpresensing-app/public
+    command: >
+      artisan queue:work
+        --sleep=5
+        --tries=3
+        --timeout=120
+        --max-jobs=500
+        --max-time=3600
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+          cpus: "0.7"
+        reservations:
+          memory: 128M
+          cpus: "0.25"
+
+  scheduler:
+    extends:
+      file: ../compose.common.yml
+      service: php-scheduler-base
+    image: smartpresensing-app:v1.0.0
+    container_name: smartpresensing-scheduler
+    working_dir: /var/www/smartpresensing-app
+    env_file:
+      - ../env/.env.smartpresensing
+    environment:
+      APP_URL: "http://192.168.1.9:7100"
+      DB_HOST: database-service
+      DB_USERNAME: smartprese-user
+      DB_PASSWORD: smartpresen-password
+      DB_DATABASE: smartpresence
+    volumes:
+      - smartpresensing_storage:/var/www/smartpresensing-app/storage
+      - smartpresensing_bootstrap_cache:/var/www/smartpresensing-app/bootstrap/cache
+      - smartpresensing_public:/var/www/smartpresensing-app/public
+    command: >
+      artisan schedule:work
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.2"
+        reservations:
+          memory: 64M
+          cpus: "0.1"
