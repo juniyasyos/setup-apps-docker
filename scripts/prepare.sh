@@ -174,7 +174,19 @@ get_app_status() {
             if docker exec database-service mysql -uroot -prootpass123 -e "SHOW DATABASES LIKE '${db_name}';" --silent 2>/dev/null | grep -q "${db_name}"; then
                 c_db="Ready"
             else
-                c_db="Miss "
+                # Database is missing but service is running. Execute the init script directly to create it on-the-fly
+                local init_sql="${PROJECT_DIR}/docker/db/sql/00-init-multi-db.sql"
+                if [ -f "$init_sql" ]; then
+                    docker exec -i database-service mysql -uroot -prootpass123 < "$init_sql" &>/dev/null || true
+                    # Recheck database
+                    if docker exec database-service mysql -uroot -prootpass123 -e "SHOW DATABASES LIKE '${db_name}';" --silent 2>/dev/null | grep -q "${db_name}"; then
+                        c_db="Ready"
+                    else
+                        c_db="Miss "
+                    fi
+                else
+                    c_db="Miss "
+                fi
             fi
         fi
     fi
@@ -310,7 +322,18 @@ show_app_detail() {
             if docker exec database-service mysql -uroot -prootpass123 -e "SHOW DATABASES LIKE '${database}';" --silent 2>/dev/null | grep -q "${database}"; then
                 db_status="Ready"
             else
-                db_status="Missing"
+                # Database is missing, auto-create using init script
+                local init_sql="${PROJECT_DIR}/docker/db/sql/00-init-multi-db.sql"
+                if [ -f "$init_sql" ]; then
+                    docker exec -i database-service mysql -uroot -prootpass123 < "$init_sql" &>/dev/null || true
+                    if docker exec database-service mysql -uroot -prootpass123 -e "SHOW DATABASES LIKE '${database}';" --silent 2>/dev/null | grep -q "${database}"; then
+                        db_status="Ready"
+                    else
+                        db_status="Missing"
+                    fi
+                else
+                    db_status="Missing"
+                fi
             fi
         fi
     fi
