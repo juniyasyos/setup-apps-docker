@@ -5,7 +5,7 @@ services:
     extends:
       file: ../compose.common.yml
       service: php-app-base
-    image: smartpresensing-app:v1.0.0
+    image: smartpresensing-app:latest
     container_name: smartpresensing-app
     working_dir: /var/www/smartpresensing-app
     env_file:
@@ -42,7 +42,7 @@ services:
     extends:
       file: ../compose.common.yml
       service: php-worker-base
-    image: smartpresensing-app:v1.0.0
+    image: smartpresensing-app:latest
     container_name: smartpresensing-queue
     working_dir: /var/www/smartpresensing-app
     env_file:
@@ -77,7 +77,7 @@ services:
     extends:
       file: ../compose.common.yml
       service: php-scheduler-base
-    image: smartpresensing-app:v1.0.0
+    image: smartpresensing-app:latest
     container_name: smartpresensing-scheduler
     working_dir: /var/www/smartpresensing-app
     env_file:
