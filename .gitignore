@@ -24,7 +24,8 @@ Repos/
 # Sertificate 
 *.crt
 
-site/*
+sources/*
+!sources/.gitkeep
 
 # ===========================================
 # PRODUCTION ENVIRONMENT FILES (SECRETS)
@@ -50,7 +51,7 @@ Docker/phpmyadmin/sessions/*
 # ===========================================
 
 # Database data and logs (SENSITIVE)
-DockerNew/db/save/
+docker/db/save/
 DockerNew/db/logs/
 
 # Redis data (SENSITIVE)
@@ -144,4 +145,4 @@ temp/
 .Spotlight-V100
 .Trashes
 ehthumbs.db
-Thumbs.db
+Thumbs.dbstorage/*

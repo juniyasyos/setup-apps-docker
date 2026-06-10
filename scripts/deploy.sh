@@ -2,18 +2,18 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-COMPOSE_APPS="$SCRIPT_DIR/docker-compose-multi-apps.yml"
-ENV_DEV="$SCRIPT_DIR/env/.env.dev"
-ENV_PROD="$SCRIPT_DIR/env/.env.prod"
+COMPOSE_APPS="$SCRIPT_DIR/compose.yml"
+ENV_DEV="$SCRIPT_DIR/env/dev.env"
+ENV_PROD="$SCRIPT_DIR/env/prod.env"
 
 usage() {
   cat <<'EOF'
 Usage:
-  ./dc.sh up --dev
-  ./dc.sh down --dev
-  ./dc.sh rebuild --v --prod
+  ./scripts/deploy.sh up --dev
+  ./scripts/deploy.sh down --dev
+  ./scripts/deploy.sh rebuild --v --prod
 
 Commands:
   up       Start stack in detached mode
@@ -21,8 +21,8 @@ Commands:
   rebuild  Pull images and recreate containers
 
 Flags:
-  --dev          Use env/.env.dev
-  --prod         Use env/.env.prod
+  --dev          Use env/dev.env
+  --prod         Use env/prod.env
   --v, -v        Verbose docker compose output
   -h, --help     Show this help
 
@@ -32,7 +32,7 @@ Safety:
 
 Defaults:
   - Environment: dev
-  - Compose file: docker-compose-multi-apps.yml
+  - Compose file: compose.yml
 EOF
 }
 

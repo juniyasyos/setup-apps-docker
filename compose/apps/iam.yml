@@ -3,13 +3,13 @@ name: service-iam
 services:
   app:
     extends:
-      file: ../compose.common.yml
+      file: ../base/common.yml
       service: php-app-base
     image: iam-server:v1.0.0
     container_name: iam-app
     working_dir: /var/www/iam
     env_file:
-      - ../env/.env.iam
+      - ../../apps/iam/.env.example
     environment:
       APP_ENV: production
       TRUSTED_PROXIES: "*"
@@ -46,13 +46,13 @@ services:
 
   queue:
     extends:
-      file: ../compose.common.yml
+      file: ../base/common.yml
       service: php-worker-base
     image: iam-server:v1.0.0
     container_name: iam-queue
     working_dir: /var/www/iam
     env_file:
-      - ../env/.env.iam
+      - ../../apps/iam/.env.example
     environment:
       APP_ENV: production
       APP_URL: "http://192.168.1.4:8100"
@@ -88,13 +88,13 @@ services:
 
   scheduler:
     extends:
-      file: ../compose.common.yml
+      file: ../base/common.yml
       service: php-scheduler-base
     image: iam-server:v1.0.0
     container_name: iam-scheduler
     working_dir: /var/www/iam
     env_file:
-      - ../env/.env.iam
+      - ../../apps/iam/.env.example
     environment:
       APP_ENV: production
       APP_URL: "http://192.168.1.4:8100"

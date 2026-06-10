@@ -12,7 +12,7 @@ services:
   siimut:
     build:
       context: .
-      dockerfile: DockerNew/php/Dockerfile.siimut-registry
+      dockerfile: apps/siimut/Dockerfile
       args:
         UID: "1000"
         GID: "1000"
@@ -42,7 +42,7 @@ services:
   ikp:
     build:
       context: .
-      dockerfile: DockerNew/php/Dockerfile.ikp-registry
+      dockerfile: apps/ikp/Dockerfile
       args:
         UID: "1000"
         GID: "1000"
@@ -71,7 +71,7 @@ services:
   iam-server:
     build:
       context: .
-      dockerfile: DockerNew/php/Dockerfile.iam-registry
+      dockerfile: apps/iam/Dockerfile
       args:
         UID: "1000"
         GID: "1000"
@@ -89,7 +89,7 @@ services:
   lms-app:
     build:
       context: .
-      dockerfile: DockerNew/php/Dockerfile.lms-registry
+      dockerfile: apps/lms/Dockerfile
       args:
         UID: "1000"
         GID: "1000"

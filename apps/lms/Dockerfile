@@ -1,5 +1,5 @@
 # =========================
-# Production IAM Image for Registry
+# Production LMS Image for Registry
 # Self-contained, no external mounts needed
 # Optimized build caching and smaller runtime image
 # =========================
@@ -8,7 +8,7 @@ FROM php:8.4-fpm-alpine AS base
 ARG UID=1000
 ARG GID=1000
 ARG TZ=Asia/Jakarta
-ARG APP_NAME="IAM Server"
+ARG APP_NAME="LMS Application"
 
 # Install runtime dependencies and build PHP extensions
 RUN apk add --no-cache \
@@ -43,7 +43,7 @@ RUN apk add --no-cache \
   && docker-php-ext-enable igbinary apcu \
   && apk del --no-network $PHPIZE_DEPS linux-headers \
   && rm -rf /var/cache/apk/* /tmp/*
-  
+
 RUN addgroup -g "${GID}" www \
   && adduser -D -G www -u "${UID}" www \
   && sed -ri 's/^user = .*/user = www/' /usr/local/etc/php-fpm.d/www.conf \
@@ -56,7 +56,7 @@ ENV APP_NAME=${APP_NAME}
 # =========================
 FROM base AS builder
 
-ARG APP_DIR=iam-server
+ARG APP_DIR=lms-app
 ENV COMPOSER_CACHE_DIR=/tmp/composer-cache \
     COMPOSER_MEMORY_LIMIT=-1 \
     COMPOSER_NO_INTERACTION=1
@@ -65,8 +65,8 @@ WORKDIR /build
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-COPY site/${APP_DIR}/composer.json site/${APP_DIR}/composer.lock* ./
-COPY site/${APP_DIR}/ .
+COPY sources/${APP_DIR}/composer.json sources/${APP_DIR}/composer.lock* ./
+COPY sources/${APP_DIR}/ .
 RUN set -eux; \
     composer install \
       --no-dev \
@@ -78,19 +78,27 @@ RUN set -eux; \
     composer dump-autoload --optimize --classmap-authoritative --no-scripts || true; \
     rm -rf "$COMPOSER_CACHE_DIR" /tmp/*
 
+COPY sources/${APP_DIR}/ .
+RUN set -eux; \
+    composer dump-autoload --optimize --classmap-authoritative --no-scripts || true; \
+    if [ -f .env ]; then \
+      php artisan optimize || true; \
+    fi; \
+    rm -rf /tmp/*
+
 # =========================
 # Stage 3: Runtime
 # =========================
 FROM base AS runtime
 
 ARG TZ=Asia/Jakarta
-ARG APP_NAME="IAM Server"
+ARG APP_NAME="LMS Application"
 
 ENV APP_ENV=production \
     PHP_OPCACHE_VALIDATE_TIMESTAMPS=1 \
     PHP_MEMORY_LIMIT=512M \
     APP_NAME=${APP_NAME} \
-    APP_WORKDIR=/var/www/iam
+    APP_WORKDIR=/var/www/lms-app
 
 WORKDIR ${APP_WORKDIR}
 
@@ -147,7 +155,7 @@ RUN set -eux; \
     chmod 664 storage/logs/laravel.log; \
     if [ -d public ]; then chmod -R 755 public; fi
 
-COPY DockerNew/php/entrypoint-iam.sh /usr/local/bin/entrypoint.sh
+COPY docker/php/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 EXPOSE 9000

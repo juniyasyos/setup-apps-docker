@@ -1,15 +1,15 @@
-# =========================
-# Production IKP Image for Registry
-# Self-contained, no external mounts needed
-# =========================
+# ============================================
+# Production SIIMUT Image for Docker Hub
+# Optimized: Build once, use 3x (app/queue/scheduler)
+# ============================================
 FROM php:8.4-fpm-alpine AS base
 
 ARG UID=1000
 ARG GID=1000
 ARG TZ=Asia/Jakarta
-ARG APP_NAME="IKP Application"
+ARG APP_NAME="SIIMUT Application"
 
-# Sistem & build deps
+# Install system dependencies and PHP extensions
 RUN apk add --no-cache \
       tzdata bash shadow ca-certificates unzip \
       icu-dev oniguruma-dev libzip-dev zlib-dev \
@@ -43,7 +43,10 @@ RUN apk add --no-cache \
   && apk del --no-network $PHPIZE_DEPS linux-headers \
   && rm -rf /var/cache/apk/* /tmp/*
 
-# User non-root
+# Copy composer binary
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+# Create non-root user
 RUN addgroup -g "${GID}" www \
   && adduser -D -G www -u "${UID}" www \
   && sed -ri 's/^user = .*/user = www/' /usr/local/etc/php-fpm.d/www.conf \
@@ -51,48 +54,60 @@ RUN addgroup -g "${GID}" www \
 
 ENV APP_NAME=${APP_NAME}
 
-# =========================
-# Stage 2: Builder
-# =========================
+# ============================================
+# Stage 2: Build & Dependencies
+# ============================================
 FROM base AS builder
 
-ARG APP_DIR=ikp
+ARG APP_DIR=siimut
+
 ENV COMPOSER_CACHE_DIR=/tmp/composer-cache \
     COMPOSER_MEMORY_LIMIT=-1 \
     COMPOSER_NO_INTERACTION=1
 
 WORKDIR /build
 
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+# Copy only composer files first (better caching)
+COPY sources/${APP_DIR}/composer.json sources/${APP_DIR}/composer.lock* ./
 
-COPY site/${APP_DIR}/composer.json site/${APP_DIR}/composer.lock* ./
+# Install composer dependencies with optimization
 RUN set -eux; \
     composer install \
+      --no-dev \
       --prefer-dist \
       --no-interaction \
       --no-progress \
-      --classmap-authoritative \
-      --no-scripts; \
+      --no-scripts \
+      --optimize-autoloader \
+      --classmap-authoritative; \
     rm -rf "$COMPOSER_CACHE_DIR"
 
-COPY site/${APP_DIR}/ .
+# Copy entire application code
+COPY sources/${APP_DIR}/ ./
+
+# Finalize: dump autoloader and optimize
 RUN set -eux; \
-    composer dump-autoload --optimize --classmap-authoritative --no-scripts || true; \
+    composer dump-autoload --optimize --classmap-authoritative --no-scripts 2>/dev/null || true; \
+    # Try to run optimization if .env exists
     if [ -f .env ]; then \
-      php artisan optimize || true; \
+      php artisan optimize 2>/dev/null || true; \
     fi; \
-    rm -rf /tmp/*
+    # Verify Livewire is present
+    if [ -d vendor/livewire ]; then \
+      echo "✅ Livewire verified"; \
+    else \
+      echo "⚠️ Livewire not found in dependencies"; \
+    fi
 
-# =========================
+# ============================================
 
-# Stage 3: Runtime
-# =========================
+# ============================================
+# Stage 3: Runtime (Final Image)
+# ============================================
 FROM base AS runtime
 
 ARG TZ=Asia/Jakarta
-ARG APP_NAME="IKP Application"
-
-# build-time arguments which also become optional default env values
+ARG APP_NAME="SIIMUT Application"
 ARG DB_HOST
 ARG DB_USERNAME
 ARG DB_PASSWORD
@@ -104,10 +119,10 @@ ARG AWS_URL
 ARG AWS_ENDPOINT
 
 ENV APP_ENV=production \
-    PHP_OPCACHE_VALIDATE_TIMESTAMPS=1 \
+    APP_WORKDIR=/var/www/siimut \
+    PHP_OPCACHE_VALIDATE_TIMESTAMPS=0 \
     PHP_MEMORY_LIMIT=512M \
     APP_NAME=${APP_NAME} \
-    APP_WORKDIR=/var/www/ikp \
     DB_HOST=${DB_HOST:-} \
     DB_USERNAME=${DB_USERNAME:-} \
     DB_PASSWORD=${DB_PASSWORD:-} \
@@ -117,21 +132,12 @@ ENV APP_ENV=production \
     AWS_BUCKET=${AWS_BUCKET:-} \
     AWS_URL=${AWS_URL:-} \
     AWS_ENDPOINT=${AWS_ENDPOINT:-}
-# show minio config at build time (cannot verify connectivity during build because network
-# to the "minio" service may not exist yet). this helps to ensure the correct arg was
-# passed through from docker-compose or build command.
-RUN echo "[build] AWS_ENDPOINT=${AWS_ENDPOINT:-<unset>}" && \
-    echo "[build] AWS_URL=${AWS_URL:-<unset>}" && \
-    # ensure docker-compose passes port 9090 in build args
-    echo "[build] extracted port=$(echo \"${AWS_ENDPOINT:-}\" | awk -F: '{print $NF}')" && \
-    if [ "$(echo \"${AWS_ENDPOINT:-}\" | awk -F: '{print $NF}')" != "9090" ]; then \
-        echo "[build] WARNING: AWS_ENDPOINT port not 9090"; \
-    fi
 
 WORKDIR ${APP_WORKDIR}
 
-# PHP tuning (production)
+# PHP Configuration (production optimized)
 RUN set -eux; \
+  # Laravel settings
   { \
     echo "memory_limit=${PHP_MEMORY_LIMIT}"; \
     echo "upload_max_filesize=64M"; \
@@ -145,6 +151,7 @@ RUN set -eux; \
     echo "log_errors=On"; \
     echo "error_log=/var/log/php_errors.log"; \
   } > /usr/local/etc/php/conf.d/laravel.ini; \
+  # OPcache optimization
   { \
     echo "opcache.enable=1"; \
     echo "opcache.enable_cli=0"; \
@@ -158,27 +165,27 @@ RUN set -eux; \
     echo "opcache.save_comments=1"; \
     echo "opcache.enable_file_override=1"; \
   } > /usr/local/etc/php/conf.d/opcache.ini; \
+  # APCu cache
   { \
     echo "apc.enabled=1"; \
     echo "apc.shm_size=128M"; \
     echo "apc.enable_cli=0"; \
     echo "apc.ttl=3600"; \
   } > /usr/local/etc/php/conf.d/apcu.ini; \
-  # FPM tuning
+  # PHP-FPM tuning for production
   sed -ri 's|^;?pm =.*|pm = dynamic|' /usr/local/etc/php-fpm.d/www.conf; \
   sed -ri 's|^;?pm\.max_children =.*|pm.max_children = 50|' /usr/local/etc/php-fpm.d/www.conf; \
   sed -ri 's|^;?pm\.start_servers =.*|pm.start_servers = 8|' /usr/local/etc/php-fpm.d/www.conf; \
   sed -ri 's|^;?pm\.min_spare_servers =.*|pm.min_spare_servers = 4|' /usr/local/etc/php-fpm.d/www.conf; \
   sed -ri 's|^;?pm\.max_spare_servers =.*|pm.max_spare_servers = 16|' /usr/local/etc/php-fpm.d/www.conf; \
-  sed -ri 's|^;?pm\.max_requests =.*|pm.max_requests =  1000|' /usr/local/etc/php-fpm.d/www.conf; \
+  sed -ri 's|^;?pm\.max_requests =.*|pm.max_requests = 1000|' /usr/local/etc/php-fpm.d/www.conf; \
   sed -ri 's|^;?clear_env =.*|clear_env = no|' /usr/local/etc/php-fpm.d/www.conf
 
-# Copy app from builder stage
+# Copy application from builder stage
 COPY --from=builder --chown=www:www /build ${APP_WORKDIR}
 
-# Permissions & directory setup
+# Setup Laravel directories and permissions
 RUN set -eux; \
-    # Create all Laravel cache directories
     mkdir -p storage/framework/cache/data \
              storage/framework/sessions \
              storage/framework/views \
@@ -186,23 +193,18 @@ RUN set -eux; \
              storage/logs \
              storage/app/public \
              bootstrap/cache; \
-    # Set ownership
     chown -R www:www storage bootstrap/cache; \
-    # Set permissions (recursive write for cache dirs)
     chmod -R ug+rwX storage bootstrap/cache; \
-    # Ensure views directory is fully writable
     chmod -R 775 storage/framework/views; \
-    # Public assets
-    if [ -d public ]; then \
-      chmod -R 755 public; \
-    fi
+    if [ -d public ]; then chmod -R 755 public; fi
 
-# Entrypoint untuk copy public/ ke shared volume saat startup
-COPY DockerNew/php/entrypoint-registry.sh /usr/local/bin/entrypoint.sh
+# Copy entrypoint script
+COPY docker/php/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 EXPOSE 9000
 
+# Lightweight health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD php -r "exit(extension_loaded('opcache') ? 0 : 1);"
 

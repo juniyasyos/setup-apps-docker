@@ -24,7 +24,7 @@ set -e
 # Configuration
 # ============================================
 DOCKER_HUB_USER="${DOCKER_HUB_USER:-}"
-COMPOSE_FILE="docker-compose-build.yml"
+COMPOSE_FILE="compose/build.yml"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Detect Docker Hub username if not explicitly provided
@@ -339,7 +339,7 @@ ENVIRONMENT VARIABLES:
 
 CONFIGURATION FILES:
     VERSION                Contains version string (e.g., v1.0.0)
-    docker-compose-build.yml  Build manifest
+    compose/build.yml  Build manifest
 
 NOTES:
     - VERSION file should contain only version string (e.g., v1.0.0)
@@ -399,8 +399,8 @@ if [ $? -eq 0 ]; then
             echo "  • Push to Docker Hub: ./build.sh push"
             ;;
         push)
-            echo "  • Deploy: VERSION=$VERSION docker-compose -f docker-compose-multi-apps.yml pull"
-            echo "  • Run:    VERSION=$VERSION docker-compose -f docker-compose-multi-apps.yml up -d"
+            echo "  • Deploy: VERSION=$VERSION docker-compose -f compose.yml pull"
+            echo "  • Run:    VERSION=$VERSION docker-compose -f compose.yml up -d"
             ;;
     esac
     echo ""

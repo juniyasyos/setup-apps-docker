@@ -1,15 +1,16 @@
-# ============================================
-# Production SIIMUT Image for Docker Hub
-# Optimized: Build once, use 3x (app/queue/scheduler)
-# ============================================
+# =========================
+# Production IAM Image for Registry
+# Self-contained, no external mounts needed
+# Optimized build caching and smaller runtime image
+# =========================
 FROM php:8.4-fpm-alpine AS base
 
 ARG UID=1000
 ARG GID=1000
 ARG TZ=Asia/Jakarta
-ARG APP_NAME="SIIMUT Application"
+ARG APP_NAME="IAM Server"
 
-# Install system dependencies and PHP extensions
+# Install runtime dependencies and build PHP extensions
 RUN apk add --no-cache \
       tzdata bash shadow ca-certificates unzip \
       icu-dev oniguruma-dev libzip-dev zlib-dev \
@@ -42,11 +43,7 @@ RUN apk add --no-cache \
   && docker-php-ext-enable igbinary apcu \
   && apk del --no-network $PHPIZE_DEPS linux-headers \
   && rm -rf /var/cache/apk/* /tmp/*
-
-# Copy composer binary
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
-
-# Create non-root user
+  
 RUN addgroup -g "${GID}" www \
   && adduser -D -G www -u "${UID}" www \
   && sed -ri 's/^user = .*/user = www/' /usr/local/etc/php-fpm.d/www.conf \
@@ -54,90 +51,51 @@ RUN addgroup -g "${GID}" www \
 
 ENV APP_NAME=${APP_NAME}
 
-# ============================================
-# Stage 2: Build & Dependencies
-# ============================================
+# =========================
+# Stage 2: Builder
+# =========================
 FROM base AS builder
 
-ARG APP_DIR=siimut
-
+ARG APP_DIR=iam-server
 ENV COMPOSER_CACHE_DIR=/tmp/composer-cache \
     COMPOSER_MEMORY_LIMIT=-1 \
     COMPOSER_NO_INTERACTION=1
 
 WORKDIR /build
 
-# Copy only composer files first (better caching)
-COPY site/${APP_DIR}/composer.json site/${APP_DIR}/composer.lock* ./
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Install composer dependencies with optimization
+COPY sources/${APP_DIR}/composer.json sources/${APP_DIR}/composer.lock* ./
+COPY sources/${APP_DIR}/ .
 RUN set -eux; \
     composer install \
       --no-dev \
       --prefer-dist \
       --no-interaction \
       --no-progress \
-      --no-scripts \
       --optimize-autoloader \
       --classmap-authoritative; \
-    rm -rf "$COMPOSER_CACHE_DIR"
+    composer dump-autoload --optimize --classmap-authoritative --no-scripts || true; \
+    rm -rf "$COMPOSER_CACHE_DIR" /tmp/*
 
-# Copy entire application code
-COPY site/${APP_DIR}/ ./
-
-# Finalize: dump autoloader and optimize
-RUN set -eux; \
-    composer dump-autoload --optimize --classmap-authoritative --no-scripts 2>/dev/null || true; \
-    # Try to run optimization if .env exists
-    if [ -f .env ]; then \
-      php artisan optimize 2>/dev/null || true; \
-    fi; \
-    # Verify Livewire is present
-    if [ -d vendor/livewire ]; then \
-      echo "✅ Livewire verified"; \
-    else \
-      echo "⚠️ Livewire not found in dependencies"; \
-    fi
-
-# ============================================
-
-# ============================================
-# Stage 3: Runtime (Final Image)
-# ============================================
+# =========================
+# Stage 3: Runtime
+# =========================
 FROM base AS runtime
 
 ARG TZ=Asia/Jakarta
-ARG APP_NAME="SIIMUT Application"
-ARG DB_HOST
-ARG DB_USERNAME
-ARG DB_PASSWORD
-ARG DB_DATABASE
-ARG AWS_ACCESS_KEY_ID
-ARG AWS_SECRET_ACCESS_KEY
-ARG AWS_BUCKET
-ARG AWS_URL
-ARG AWS_ENDPOINT
+ARG APP_NAME="IAM Server"
 
 ENV APP_ENV=production \
-    APP_WORKDIR=/var/www/siimut \
-    PHP_OPCACHE_VALIDATE_TIMESTAMPS=0 \
+    PHP_OPCACHE_VALIDATE_TIMESTAMPS=1 \
     PHP_MEMORY_LIMIT=512M \
     APP_NAME=${APP_NAME} \
-    DB_HOST=${DB_HOST:-} \
-    DB_USERNAME=${DB_USERNAME:-} \
-    DB_PASSWORD=${DB_PASSWORD:-} \
-    DB_DATABASE=${DB_DATABASE:-} \
-    AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-} \
-    AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-} \
-    AWS_BUCKET=${AWS_BUCKET:-} \
-    AWS_URL=${AWS_URL:-} \
-    AWS_ENDPOINT=${AWS_ENDPOINT:-}
+    APP_WORKDIR=/var/www/iam
 
 WORKDIR ${APP_WORKDIR}
 
-# PHP Configuration (production optimized)
+# PHP tuning (production)
 RUN set -eux; \
-  # Laravel settings
   { \
     echo "memory_limit=${PHP_MEMORY_LIMIT}"; \
     echo "upload_max_filesize=64M"; \
@@ -151,7 +109,6 @@ RUN set -eux; \
     echo "log_errors=On"; \
     echo "error_log=/var/log/php_errors.log"; \
   } > /usr/local/etc/php/conf.d/laravel.ini; \
-  # OPcache optimization
   { \
     echo "opcache.enable=1"; \
     echo "opcache.enable_cli=0"; \
@@ -165,14 +122,13 @@ RUN set -eux; \
     echo "opcache.save_comments=1"; \
     echo "opcache.enable_file_override=1"; \
   } > /usr/local/etc/php/conf.d/opcache.ini; \
-  # APCu cache
   { \
     echo "apc.enabled=1"; \
     echo "apc.shm_size=128M"; \
     echo "apc.enable_cli=0"; \
     echo "apc.ttl=3600"; \
   } > /usr/local/etc/php/conf.d/apcu.ini; \
-  # PHP-FPM tuning for production
+  # FPM tuning
   sed -ri 's|^;?pm =.*|pm = dynamic|' /usr/local/etc/php-fpm.d/www.conf; \
   sed -ri 's|^;?pm\.max_children =.*|pm.max_children = 50|' /usr/local/etc/php-fpm.d/www.conf; \
   sed -ri 's|^;?pm\.start_servers =.*|pm.start_servers = 8|' /usr/local/etc/php-fpm.d/www.conf; \
@@ -181,30 +137,21 @@ RUN set -eux; \
   sed -ri 's|^;?pm\.max_requests =.*|pm.max_requests = 1000|' /usr/local/etc/php-fpm.d/www.conf; \
   sed -ri 's|^;?clear_env =.*|clear_env = no|' /usr/local/etc/php-fpm.d/www.conf
 
-# Copy application from builder stage
 COPY --from=builder --chown=www:www /build ${APP_WORKDIR}
 
-# Setup Laravel directories and permissions
 RUN set -eux; \
-    mkdir -p storage/framework/cache/data \
-             storage/framework/sessions \
-             storage/framework/views \
-             storage/framework/testing \
-             storage/logs \
-             storage/app/public \
-             bootstrap/cache; \
+    mkdir -p storage storage/logs storage/framework/cache storage/framework/sessions storage/framework/views bootstrap/cache; \
+    touch storage/logs/laravel.log; \
     chown -R www:www storage bootstrap/cache; \
     chmod -R ug+rwX storage bootstrap/cache; \
-    chmod -R 775 storage/framework/views; \
+    chmod 664 storage/logs/laravel.log; \
     if [ -d public ]; then chmod -R 755 public; fi
 
-# Copy entrypoint script
-COPY DockerNew/php/entrypoint-registry.sh /usr/local/bin/entrypoint.sh
+COPY docker/php/entrypoint-iam.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 EXPOSE 9000
 
-# Lightweight health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD php -r "exit(extension_loaded('opcache') ? 0 : 1);"
 

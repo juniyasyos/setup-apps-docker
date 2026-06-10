@@ -3,13 +3,13 @@ name: service-ikp
 services:
   app:
     extends:
-      file: ../compose.common.yml
+      file: ../base/common.yml
       service: php-app-base
     image: ikp:v1.0.0
     container_name: ikp-app
     working_dir: /var/www/ikp
     env_file:
-      - ../env/.env.ikp
+      - ../../apps/ikp/.env.example
     environment:
       APP_ENV: production
       APP_DEBUG: "false"
@@ -58,13 +58,13 @@ services:
 
   queue:
     extends:
-      file: ../compose.common.yml
+      file: ../base/common.yml
       service: php-worker-base
     image: ikp:v1.0.0
     container_name: ikp-queue
     working_dir: /var/www/ikp
     env_file:
-      - ../env/.env.ikp
+      - ../../apps/ikp/.env.example
     environment:
       APP_ENV: production
       DB_HOST: database-service
@@ -91,13 +91,13 @@ services:
 
   scheduler:
     extends:
-      file: ../compose.common.yml
+      file: ../base/common.yml
       service: php-scheduler-base
     image: ikp:v1.0.0
     container_name: ikp-scheduler
     working_dir: /var/www/ikp
     env_file:
-      - ../env/.env.ikp
+      - ../../apps/ikp/.env.example
     environment:
       APP_ENV: production
       DB_HOST: database-service

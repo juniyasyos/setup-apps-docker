@@ -1,0 +1,17 @@
+# LMS — Learning Management System CitraHusada
+name: lms
+repo: https://github.com/AryaAP23/LMS-CitraHusada
+branch: main
+source_dir: lms-app
+image: juniyasyos/lms-app
+version: v1.0.0
+port: 7000
+domain: lms.local
+database: db_lms_citrahusada
+db_user: lms_user
+queue: true
+scheduler: true
+php_version: "8.4"
+has_prod_env: true
+has_local_deps: false
+description: Learning Management System berbasis Laravel yang dikustomisasi untuk kebutuhan internal institusi kesehatan

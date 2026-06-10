@@ -1,0 +1,32 @@
+# Production profile override
+# Usage: docker compose --profile prod ...
+# or via: ./rsch up --prod
+
+services:
+  web:
+    ports:
+      - "${SIIMUT_HOST_PORT:-8000}:8000"
+      - "${IKP_HOST_PORT:-8200}:8200"
+      - "${IAM_HOST_PORT:-8100}:8100"
+      - "${LMS_HOST_PORT:-7000}:7000"
+
+  # Production overrides: optimized workers, production settings
+  app-siimut:
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+
+  app-ikp:
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+
+  app-iam:
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+
+  app-lms:
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"

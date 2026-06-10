@@ -1,0 +1,17 @@
+# IAM Server — Authentication & SSO
+name: iam
+repo: https://github.com/juniyasyos/auth-server.git
+branch: main
+source_dir: iam-server
+image: juniyasyos/iam-server
+version: v1.0.0
+port: 8100
+domain: iam.local
+database: iam_db
+db_user: iam_user
+queue: true
+scheduler: true
+php_version: "8.4"
+has_prod_env: true
+has_local_deps: false
+description: IAM Server - Authentication & SSO Server

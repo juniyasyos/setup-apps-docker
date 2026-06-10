@@ -3,13 +3,13 @@ name: service-siimut
 services:
   app:
     extends:
-      file: ../compose.common.yml
+      file: ../base/common.yml
       service: php-app-base
     image: siimut:v2.0.0
     container_name: siimut-app
     working_dir: /var/www/siimut
     env_file:
-      - ../env/.env.siimut
+      - ../../apps/siimut/.env.example
     environment:
       APP_ENV: production
       APP_DEBUG: true
@@ -53,13 +53,13 @@ services:
 
   queue:
     extends:
-      file: ../compose.common.yml
+      file: ../base/common.yml
       service: php-worker-base
     image: siimut:v2.0.0
     container_name: siimut-queue
     working_dir: /var/www/siimut
     env_file:
-      - ../env/.env.siimut
+      - ../../apps/siimut/.env.example
     environment:
       DB_HOST: database-service
       DB_USER: siimut_user
@@ -85,13 +85,13 @@ services:
 
   scheduler:
     extends:
-      file: ../compose.common.yml
+      file: ../base/common.yml
       service: php-scheduler-base
     image: siimut:v2.0.0
     container_name: siimut-scheduler
     working_dir: /var/www/siimut
     env_file:
-      - ../env/.env.siimut
+      - ../../apps/siimut/.env.example
     environment:
       DB_HOST: database-service
       DB_USER: siimut_user
