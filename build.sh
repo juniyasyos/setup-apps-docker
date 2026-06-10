@@ -65,7 +65,7 @@ SIIMUT_VERSION="v2.0.0"
 IKP_VERSION="v1.0.0"
 IAM_VERSION="v1.0.0"
 LMS_VERSION="v1.0.0"
-SMARTPROESENSING_VERSION="v1.0.0"
+SMARTPRESENSING_VERSION="v1.0.0"
 # SIIMUT_VERSION="${SIIMUT_VERSION:-$VERSION}"
 # IKP_VERSION="${IKP_VERSION:-$VERSION}"
 # IAM_VERSION="${IAM_VERSION:-$VERSION}"
@@ -106,7 +106,7 @@ if [ -z "$TARGET" ]; then
 fi
 
 if [ "$TARGET" = "all" ]; then
-    SELECTED_SERVICES=(siimut ikp iam-server lms-app)
+    SELECTED_SERVICES=(siimut ikp iam-server lms-app smartpresensing-app)
 else
     SELECTED_SERVICES=($TARGET)
 fi
@@ -130,7 +130,7 @@ service_version() {
             echo "$LMS_VERSION"
             ;;
         smartpresensing-app)
-            echo "$SMARTPROESENSING_VERSION"
+            echo "$SMARTPRESENSING_VERSION"
             ;;
         *)
             echo "$VERSION"
@@ -192,7 +192,7 @@ print_config() {
     echo "║  IKP Version:      $IKP_VERSION"
     echo "║  IAM Version:      $IAM_VERSION"
     echo "║  LMS Version:      $LMS_VERSION"
-    echo "║  SMARTPRESE V:     $SMARTPROESENSING_VERSION"
+    echo "║  SMARTPRESENSING V:     $SMARTPROESENSING_VERSION"
     echo "║  Compose File:     $COMPOSE_FILE"
     echo "║  Command:          $COMMAND"
     echo "╚════════════════════════════════════════════╝"
@@ -203,7 +203,7 @@ build_image() {
     log_info "Building ${SELECTED_SERVICES[*]} from $COMPOSE_FILE..."
 
     if [ "$TARGET" = "all" ]; then
-        if SIIMUT_VERSION="$SIIMUT_VERSION" IKP_VERSION="$IKP_VERSION" IAM_VERSION="$IAM_VERSION" LMS_VERSION="$LMS_VERSION" \
+        if SIIMUT_VERSION="$SIIMUT_VERSION" IKP_VERSION="$IKP_VERSION" IAM_VERSION="$IAM_VERSION" LMS_VERSION="$LMS_VERSION" SMARTPRESENSING_VERSION="$SMARTPRESENSING_VERSION" \
             docker compose -f "$SCRIPT_DIR/$COMPOSE_FILE" build; then
             log_success "Build completed successfully"
             return 0
