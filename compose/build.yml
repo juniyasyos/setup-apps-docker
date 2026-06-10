@@ -11,7 +11,7 @@ services:
   ####################################################################################################
   siimut:
     build:
-      context: .
+      context: ..
       dockerfile: apps/siimut/Dockerfile
       args:
         UID: "1000"
@@ -41,7 +41,7 @@ services:
   ####################################################################################################
   ikp:
     build:
-      context: .
+      context: ..
       dockerfile: apps/ikp/Dockerfile
       args:
         UID: "1000"
@@ -70,7 +70,7 @@ services:
   ####################################################################################################
   iam-server:
     build:
-      context: .
+      context: ..
       dockerfile: apps/iam/Dockerfile
       args:
         UID: "1000"
@@ -81,5 +81,32 @@ services:
         APP_DIR: "iam-server"
         BUILD_TIMESTAMP: "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
     image: iam-server:${IAM_VERSION:-latest}
+    pull_policy: never
+
+  ####################################################################################################
+  # Learning Management System berbasis Laravel yang dikustomisasi untuk kebutuhan internal institusi kesehatan
+  ####################################################################################################
+  lms:
+    build:
+      context: ..
+      dockerfile: apps/lms/Dockerfile
+      args:
+        UID: "1000"
+        GID: "1000"
+        TZ: "Asia/Jakarta"
+        APP_NAME: "Learning Management System berbasis Laravel yang dikustomisasi untuk kebutuhan internal institusi kesehatan"
+        APP_ENV: "production"
+        APP_DIR: "lms-app"
+        DB_HOST: "database-service"
+        DB_USERNAME: "lms_user"
+        DB_PASSWORD: "lms_pass123"
+        DB_DATABASE: "lms_db"
+        AWS_ACCESS_KEY_ID: "admin"
+        AWS_SECRET_ACCESS_KEY: "password"
+        AWS_BUCKET: "lms"
+        AWS_URL: "http://minio:9090/lms"
+        AWS_ENDPOINT: "http://minio:9090"
+        BUILD_TIMESTAMP: "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+    image: lms:${LMS_VERSION:-latest}
     pull_policy: never
 

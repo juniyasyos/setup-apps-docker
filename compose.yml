@@ -58,6 +58,23 @@ services:
       service: scheduler
 
 
+  # Learning Management System berbasis Laravel yang dikustomisasi untuk kebutuhan internal institusi kesehatan
+  # Image: juniyasyos/lms:VERSION
+  app-lms:
+    extends:
+      file: compose/apps/lms.yml
+      service: app
+
+  queue-lms:
+    extends:
+      file: compose/apps/lms.yml
+      service: queue
+
+  scheduler-lms:
+    extends:
+      file: compose/apps/lms.yml
+      service: scheduler
+
 ####################################################################################################
 # Named Volumes
 # Volume naming convention:
@@ -87,6 +104,14 @@ volumes:
   iam_storage:
     driver: local
   iam_bootstrap_cache:
+    driver: local
+
+  # ── LMS ──────────────────────────────────────────
+  lms_public:
+    driver: local
+  lms_storage:
+    driver: local
+  lms_bootstrap_cache:
     driver: local
 
 

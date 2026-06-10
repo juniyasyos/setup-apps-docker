@@ -1,0 +1,17 @@
+# LMS — Learning Management System
+name: lms
+repo: https://github.com/juniyasyos/lms.git
+branch: main
+source_dir: lms-app
+image: juniyasyos/lms
+version: v1.0.0
+port: 8080
+domain: lms.local
+database: lms_db
+db_user: lms_user
+queue: true
+scheduler: true
+php_version: "8.4"
+has_prod_env: true
+has_local_deps: false
+description: LMS - Learning Management System berbasis Laravel
