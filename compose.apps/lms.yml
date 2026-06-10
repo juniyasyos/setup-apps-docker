@@ -21,6 +21,11 @@ services:
       DB_USERNAME: lms_user
       DB_PASSWORD: lms-password
       DB_DATABASE: db_lms_citrahusada
+      AWS_ACCESS_KEY_ID: admin
+      AWS_SECRET_ACCESS_KEY: password
+      AWS_BUCKET: lms-bucket
+      AWS_URL: http://192.168.1.4:9090/siimut
+      AWS_ENDPOINT: http://minio:9090
     volumes:
       - lms_storage:/var/www/lms-app/storage
       - lms_bootstrap_cache:/var/www/lms-app/bootstrap/cache
