@@ -325,12 +325,97 @@ run_mode_dockerfile() {
             ;;
     esac
 
+    # Cek dan buat konfigurasi Nginx, Compose, dan Database jika belum ada
+    local database=""
+    local db_user=""
+    local db_password=""
+    local port=""
+    local domain=""
+    local queue=""
+    local scheduler=""
+    local version=""
+    local image=""
+
+    local yml_file="${PROJECT_DIR}/apps/${APP_NAME}/app.yml"
+    if [ -f "$yml_file" ]; then
+        database=$(grep -E "^database:" "$yml_file" | awk '{print $2}' | tr -d '\r' || echo "")
+        db_user=$(grep -E "^db_user:" "$yml_file" | awk '{print $2}' | tr -d '\r' || echo "")
+        db_password=$(grep -E "^db_password:" "$yml_file" | awk '{print $2}' | tr -d '\r' || echo "")
+        port=$(grep -E "^port:" "$yml_file" | awk '{print $2}' | tr -d '\r' || echo "")
+        domain=$(grep -E "^domain:" "$yml_file" | awk '{print $2}' | tr -d '\r' || echo "")
+        queue=$(grep -E "^queue:" "$yml_file" | awk '{print $2}' | tr -d '\r' || echo "")
+        scheduler=$(grep -E "^scheduler:" "$yml_file" | awk '{print $2}' | tr -d '\r' || echo "")
+        version=$(grep -E "^version:" "$yml_file" | awk '{print $2}' | tr -d '\r' || echo "")
+        image=$(grep -E "^image:" "$yml_file" | awk '{print $2}' | tr -d '\r' || echo "")
+    fi
+
+    # Fallback/defaults
+    [ -z "$database" ] && database="${APP_NAME}_db"
+    [ -z "$db_user" ] && db_user="${APP_NAME}_user"
+    [ -z "$db_password" ] && db_password="${APP_NAME}_pass123"
+    [ -z "$port" ] && port="8080"
+    [ -z "$domain" ] && domain="${APP_NAME}.local"
+    [ -z "$queue" ] && queue="false"
+    [ -z "$scheduler" ] && scheduler="false"
+    [ -z "$version" ] && version="latest"
+    [ -z "$image" ] && image="juniyasyos/${APP_NAME}"
+
+    echo ""
+    log_info "Memeriksa konfigurasi Nginx, Compose, dan Database..."
+
+    # Source scaffold.sh functions if needed
+    if ! declare -F gen_compose_app >/dev/null; then
+        source "${PROJECT_DIR}/scripts/scaffold.sh"
+    fi
+
+    # 1. Nginx Config
+    local nginx_path="${PROJECT_DIR}/docker/nginx/conf.d/${APP_NAME}.conf"
+    if [ ! -f "$nginx_path" ]; then
+        log_info "Generating Nginx Config → docker/nginx/conf.d/${APP_NAME}.conf"
+        append_nginx_conf "$APP_NAME" "$APP_DIR" "$port" "${APP_DESC:-App}"
+    else
+        log_success "Nginx Config sudah ada."
+    fi
+
+    # 2. Compose File
+    local compose_path="${PROJECT_DIR}/compose/apps/${APP_NAME}.yml"
+    if [ ! -f "$compose_path" ]; then
+        log_info "Generating Compose File → compose/apps/${APP_NAME}.yml"
+        gen_compose_app "$APP_NAME" "$APP_DIR" "$image" "$version" "$port" \
+            "$database" "$db_user" "$db_password" "${APP_DESC:-App}" \
+            "$queue" "$scheduler"
+
+        # Daftarkan ke compose files global
+        py_insert_compose_yml "$APP_NAME" "$APP_DIR" "$queue" "$scheduler" "${APP_DESC:-App}" || true
+        py_insert_web_yml "$APP_NAME" "$APP_DIR" "$port" || true
+        py_insert_build_yml "$APP_NAME" "$APP_DIR" "$db_user" "$db_password" "$database" "${APP_DESC:-App}" || true
+        append_env_files "$APP_NAME" "$port" || true
+    else
+        log_success "Compose File sudah ada."
+    fi
+
+    # 3. Database SQL Init Script
+    local sql_init_file="${PROJECT_DIR}/docker/db/sql/00-init-multi-db.sql"
+    if [ -f "$sql_init_file" ]; then
+        if ! grep -q "CREATE DATABASE IF NOT EXISTS ${database}" "$sql_init_file"; then
+            log_info "Appending Database SQL Init script → docker/db/sql/00-init-multi-db.sql"
+            append_sql_init "$APP_NAME" "$database" "$db_user" "$db_password"
+        else
+            log_success "Database SQL Init script sudah terdaftar."
+        fi
+    else
+        log_info "Generating Database SQL Init script → docker/db/sql/00-init-multi-db.sql"
+        append_sql_init "$APP_NAME" "$database" "$db_user" "$db_password"
+    fi
+
     echo ""
     echo "  ┌─────────────────────────────────────────────────────────┐"
-    echo "  │ ✅  Dockerfile siap!                                    │"
+    echo "  │ ✅  Dockerfile & Konfigurasi siap!                       │"
     echo "  │                                                         │"
     printf "  │  📄 docker/%-40s │\n" "${APP_NAME}/Dockerfile"
     printf "  │  🔧 docker/%-40s │\n" "${APP_NAME}/entrypoint.sh"
+    printf "  │  🌐 nginx/%-41s │\n" "conf.d/${APP_NAME}.conf"
+    printf "  │  🐳 compose/%-39s │\n" "apps/${APP_NAME}.yml"
     echo "  │                                                         │"
     echo "  │  Langkah selanjutnya:                                   │"
     echo "  │    ./rsch build ${APP_NAME}                             │"
