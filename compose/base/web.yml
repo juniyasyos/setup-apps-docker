@@ -12,7 +12,7 @@ x-apps: &apps
   iam:    { port: 8100 }
 
 x-web-ports: &web-ports
-  - "${WEB_PORTAL_PORT:-80}:3000"
+  - "${WEB_PORTAL_PORT:-1000}:1000"
   - "${SIIMUT_HOST_PORT:-8000}:8000"
   - "${IKP_HOST_PORT:-8200}:8200"
   - "${LMS_HOST_PORT:-8080}:8080"
