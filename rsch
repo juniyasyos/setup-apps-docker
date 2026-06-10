@@ -12,6 +12,8 @@ set -euo pipefail
 #   ./rsch build <app>       Build Docker image
 #   ./rsch up [--dev|--prod] Start all services
 #   ./rsch down [--dev|--prod] Stop all services
+#   ./rsch run-app <app>...  Start specific app(s) (siimut ikp iam lms)
+#   ./rsch down-app <app>... Stop specific app(s) (-v for volumes)
 #   ./rsch restart <app>     Restart a single app service
 #   ./rsch logs <app>        Tail logs for an app
 #   ./rsch health <app>      Health check for an app
@@ -59,6 +61,8 @@ COMMANDS:
   Runtime:
     up [--dev|--prod]   Start all services
     down [--dev|--prod] Stop all services
+    run-app <app>...    Start specific app(s) (e.g. run-app siimut ikp)
+    down-app <app>...   Stop specific app(s). Add -v to remove volumes
     restart <app>       Restart a specific app service
 
   Infrastructure:
@@ -102,6 +106,75 @@ cmd_scaffold() {
         return
     fi
     "${SCRIPT_DIR}/scripts/scaffold.sh" "$@"
+}
+
+# ──────────────────────────────────────────────
+# Run App — start specific app(s) by name
+# Usage: ./rsch run-app siimut ikp iam
+# ──────────────────────────────────────────────
+cmd_run_app() {
+    if [ $# -eq 0 ]; then
+        log_error "Usage: ./rsch run-app <app> [app ...]"
+        echo ""
+        log_info "Available apps: siimut, ikp, iam, lms"
+        log_info "Example: ./rsch run-app siimut ikp iam"
+        exit 1
+    fi
+
+    local services=()
+    for app in "$@"; do
+        services+=("app-${app}" "queue-${app}" "scheduler-${app}")
+    done
+
+    log_info "Starting: $*"
+    docker compose -f "${SCRIPT_DIR}/compose.yml" up -d "${services[@]}"
+    log_success "Started: $*"
+}
+
+# ──────────────────────────────────────────────
+# Down App — stop specific app(s), optional -v
+# Usage: ./rsch down-app siimut ikp    (preserve volumes)
+# Usage: ./rsch down-app siimut -v     (remove volumes)
+# ──────────────────────────────────────────────
+cmd_down_app() {
+    if [ $# -eq 0 ]; then
+        log_error "Usage: ./rsch down-app <app> [app ...] [-v]"
+        echo ""
+        log_info "Available apps: siimut, ikp, iam, lms"
+        log_info "Example: ./rsch down-app siimut ikp"
+        log_info "         ./rsch down-app siimut -v"
+        exit 1
+    fi
+
+    local apps=()
+    local remove_volumes=false
+    for arg in "$@"; do
+        if [ "$arg" = "-v" ]; then
+            remove_volumes=true
+        else
+            apps+=("$arg")
+        fi
+    done
+
+    if [ ${#apps[@]} -eq 0 ]; then
+        log_error "Usage: ./rsch down-app <app> [app ...] [-v]"
+        exit 1
+    fi
+
+    local services=()
+    for app in "${apps[@]}"; do
+        services+=("app-${app}" "queue-${app}" "scheduler-${app}")
+    done
+
+    if [ "$remove_volumes" = true ]; then
+        log_warn "Removing volumes for: ${apps[*]}"
+        docker compose -f "${SCRIPT_DIR}/compose.yml" down -v "${services[@]}"
+        log_success "Stopped and removed volumes for: ${apps[*]}"
+    else
+        log_info "Stopping: ${apps[*]}"
+        docker compose -f "${SCRIPT_DIR}/compose.yml" down "${services[@]}"
+        log_success "Stopped: ${apps[*]}"
+    fi
 }
 
 # ──────────────────────────────────────────────
@@ -240,6 +313,8 @@ case "$COMMAND" in
     build)      cmd_build "$@" ;;
     up)         cmd_up "$@" ;;
     down)       cmd_down "$@" ;;
+    run-app)    cmd_run_app "$@" ;;
+    down-app)   cmd_down_app "$@" ;;
     restart)    cmd_restart "$@" ;;
     logs)       cmd_logs "$@" ;;
     health)     cmd_health "$@" ;;
