@@ -1,685 +1,359 @@
-# Panduan Penggunaan — RSCH Application Platform
+# Panduan Penggunaan Lengkap — RSCH Application Platform Orchestrator
 
-> **Platform**: Docker multi-aplikasi untuk deployment dan manajemen aplikasi Laravel secara modular.
-> **CLI**: `./rsch` — satu entrypoint untuk semua operasi.
-
----
-
-## Daftar Isi
-
-1. [Arsitektur](#arsitektur)
-2. [Prasyarat](#prasyarat)
-3. [Setup Awal](#setup-awal)
-4. [CLI Reference](#cli-reference)
-5. [Manajemen Aplikasi](#manajemen-aplikasi)
-6. [Environment & Secrets](#environment--secrets)
-7. [Build & Push Image](#build--push-image)
-8. [Troubleshooting](#troubleshooting)
-9. [Referensi File](#referensi-file)
+Dokumen ini menjelaskan alur kerja operasional, konfigurasi sistem, dan proses pemeliharaan harian pada platform deployment multi-aplikasi **Rumah Sakit Citra Husada (RSCH)**.
 
 ---
 
-## Arsitektur
+## 📋 Daftar Isi
 
-```
-rsch-apps/
-│
-├── compose/                        # Definisi Docker Compose
-│   ├── base/                       #   Service infrastruktur + web
-│   │   ├── infra.yml               #     Aggregator infrastruktur
-│   │   ├── network.yml             #     Network + volume global
-│   │   ├── web.yml                 #     Nginx reverse proxy
-│   │   ├── database.yml            #     MySQL 8.0
-│   │   ├── minio.yml               #     Object Storage (S3)
-│   │   ├── phpmyadmin.yml          #     Database admin panel (profile dev)
-│   │   └── php-base.yml            #     Template PHP (app/worker/scheduler)
-│   ├── apps/                       #   Service aplikasi per-app
-│   │   ├── siimut.yml
-│   │   ├── ikp.yml
-│   │   ├── iam.yml
-│   │   └── lms.yml
-│   ├── profiles/                   #   Environment override
-│   │   ├── dev.yml
-│   │   └── prod.yml
-│   └── build.yml                   #   Build manifest (Dockerfile)
-│
-├── apps/                           # Definisi aplikasi
-│   ├── siimut/                     #   SIIMUT
-│   ├── ikp/                        #   IKP
-│   ├── iam/                        #   IAM Server
-│   └── lms/                        #   LMS
-│
-├── docker/                         # Konfigurasi container
-│   ├── nginx/                      #   Konfigurasi Nginx
-│   ├── php/                        #   PHP Dockerfile + entrypoint
-│   └── db/                         #   MySQL config + SQL init
-│
-├── env/                            # Environment files
-│   ├── common.env                  #   Variabel bersama
-│   ├── dev.env                     #   Development vars
-│   └── prod.env                    #   Production vars
-│
-├── scripts/                        # Automation
-│   ├── prepare/                    #   Persiapan app
-│   ├── build/                      #   Build tools
-│   ├── deploy/                     #   Deployment helpers
-│   ├── health/                     #   Health checks
-│   ├── maintenance/                #   Diagnostics
-│   └── generate/                   #   Code gen
-│
-├── compose.yml                     # Manifest utama (semua service)
-├── .env.example                    # Template env
-└── rsch                            # CLI entrypoint
-```
-
-### Alur Service
-
-```
-                        ┌──────────────┐
-                        │    Nginx     │  web (compose.yml)
-                        │  (reverse    │
-                        │   proxy)     │
-                        └──────┬───────┘
-                               │
-          ┌────────────────────┼────────────────────┐
-          │                    │                    │
-    ┌─────▼──────┐      ┌─────▼──────┐      ┌─────▼──────┐
-    │  app-      │      │  app-      │      │  app-      │
-    │  siimut    │      │  ikp       │      │  iam       │
-    │(:8000)     │      │(:8200)     │      │(:8100)     │
-    └─────┬──────┘      └─────┬──────┘      └─────┬──────┘
-          │                    │                    │
-    ┌─────▼──────┐      ┌─────▼──────┐      ┌─────▼──────┐
-    │ queue-     │      │ queue-     │      │ queue-     │
-    │ siimut     │      │ ikp        │      │ iam        │
-    └────────────┘      └────────────┘      └────────────┘
-    ┌────────────┐      ┌────────────┐      ┌────────────┐
-    │ scheduler- │      │ scheduler- │      │ scheduler- │
-    │ siimut     │      │ ikp        │      │ iam        │
-    └────────────┘      └────────────┘      └────────────┘
-
-    ── Base Infrastructure ──────────────────────────────
-    ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌────────┐
-    │  MySQL   │  │  MinIO   │  │phpMyAdmin│  │Portainer│
-    │(:3306)   │  │(:9090)   │  │(:8888)   │  │(:9000)  │
-    └──────────┘  └──────────┘  └──────────┘  └────────┘
-
-    Network: rsch-apps_default (172.20.0.0/16)
-```
-
-### Penamaan Resource
-
-| Resource | Format | Contoh |
-|---|---|---|
-| Container app | `{app}-app` | `siimut-app`, `ikp-app` |
-| Container queue | `{app}-queue` | `siimut-queue` |
-| Container scheduler | `{app}-scheduler` | `siimut-scheduler` |
-| Volume storage | `{app}_storage` | `siimut_storage` |
-| Volume public | `{app}_public` | `siimut_public` |
-| Volume bootstrap cache | `{app}_bootstrap_cache` | `siimut_bootstrap_cache` |
+1. [Arsitektur & Topologi Layanan](#1-arsitektur--topologi-layanan)
+2. [Prasyarat & Persiapan Sistem](#2-prasyarat--persiapan-sistem)
+3. [Panduan Memulai Cepat (Quick Start)](#3-panduan-memulai-cepat-quick-start)
+4. [Referensi Perintah CLI (`./rsch`)](#4-referensi-perintah-cli-rsch)
+5. [Alur Kerja Mode Persiapan Aplikasi (Prepare Modes)](#5-alur-kerja-mode-persiapan-aplikasi-prepare-modes)
+6. [Manajemen Environment & Secrets](#6-manajemen-environment--secrets)
+7. [Prosedur Build & Registrasi Image](#7-prosedur-build--registrasi-image)
+8. [Panduan Diagnostik & Troubleshooting](#8-panduan-diagnostik--troubleshooting)
+9. [Panduan Menambahkan Aplikasi Baru](#9-panduan-menambahkan-aplikasi-baru)
+10. [Daftar Referensi File Konfigurasi](#10-daftar-referensi-file-konfigurasi)
 
 ---
 
-## Prasyarat
+## 1. Arsitektur & Topologi Layanan
 
-| Requirement | Minimal | Catatan |
-|---|---|---|
-| **Docker Engine** | 24.x+ | Pakai Docker Compose v2 bawaan |
-| **Git** | 2.x | Untuk cloning repository |
-| **OpenSSL** | 1.1+ | Untuk generate secrets |
-| **RAM** | 8 GB (dev) / 16 GB (prod) | Semua service jalan bersamaan |
-| **Disk** | 20 GB+ | Untuk image, volume, dan source code |
-| **Ports** | 8000, 8100, 8200, 7000, 9090, 9091, 8888 | Pastikan tidak konflik |
+Platform ini mengintegrasikan seluruh aplikasi ke dalam satu orkestrator kontainer menggunakan Docker Compose. Jaringan diisolasi menggunakan subnet khusus agar lalu lintas internal tidak dapat diakses secara langsung dari luar host tanpa melalui Nginx reverse proxy.
 
-### Install Docker
+```
+                            🌐 Internet / LAN
+                                    │
+                            ┌───────▼───────┐
+                            │  Port 80/443  │
+                            └───────┬───────┘
+                                    │
+                        ┌───────────▼───────────┐
+                        │   Nginx Reverse Proxy │ (container: multi-web)
+                        └───────────┬───────────┘
+                                    │ (Rute internal via Virtual Host)
+           ┌────────────────────────┼────────────────────────┬────────────────────────┐
+           │                        │                        │                        │
+  ┌────────▼────────┐      ┌────────▼────────┐      ┌────────▼────────┐      ┌────────▼────────┐
+  │  SIIMUT App     │      │  IAM Server     │      │  IKP App        │      │  LMS App        │
+  │  (Port: 8000)   │      │  (Port: 8100)   │      │  (Port: 8200)   │      │  (Port: 7000)   │
+  └────────┬────────┘      └────────┬────────┘      └────────┬────────┘      └─────────────────┘
+           │                        │                        │
+  ┌────────▼────────┐      ┌────────▼────────┐      ┌────────▼────────┐
+  │  Queue Worker   │      │  Queue Worker   │      │  Queue Worker   │
+  │  Scheduler      │      │  Scheduler      │      │  Scheduler      │
+  └─────────────────┘      └─────────────────┘      └─────────────────┘
+           │                        │                        │
+           └────────────────────────┼────────────────────────┘
+                                    │ (Koneksi Jaringan Internal)
+                        ┌───────────▼───────────┐
+                        │   Layanan Bersama     │
+                        ├───────────────────────┤
+                        │ • MySQL Database      │ (container: database-service)
+                        │ • MinIO S3 Storage    │ (container: minio)
+                        │ • phpMyAdmin          │ (container: phpmyadmin - dev only)
+                        └───────────────────────┘
+```
 
+---
+
+## 2. Prasyarat & Persiapan Sistem
+
+Sebelum menjalankan platform, pastikan host Anda memenuhi spesifikasi berikut:
+
+| Kebutuhan | Minimal | Catatan |
+| :--- | :--- | :--- |
+| **Sistem Operasi** | Linux (Ubuntu Server 20.04/22.04 LTS direkomendasikan) | Mendukung kernel modern untuk filesystem overlay2 |
+| **Docker Engine** | Version 24.x atau lebih tinggi | Memerlukan Docker Compose v2 (fitur `include` & `extends`) |
+| **Spesifikasi Hardware**| 4 Cores CPU, 8 GB RAM (Development) / 16 GB RAM (Production) | Dibutuhkan untuk menjalankan database, S3, proxy, dan 4 aplikasi bersamaan |
+| **Utilitas Host** | Git, OpenSSL, bash v4+ | Diperlukan oleh skrip automasi pengelola platform |
+
+### Instalasi Docker Otomatis
+Jika host belum terpasang Docker, Anda dapat memasangnya menggunakan skrip installer bawaan:
 ```bash
-# Via script yang disediakan
+chmod +x rsch
 ./rsch scripts/prepare/install-docker.sh
-
-# Atau manual — lihat https://docs.docker.com/engine/install/
 ```
 
 ---
 
-## Setup Awal
+## 3. Panduan Memulai Cepat (Quick Start)
 
-### 1. Clone Project
+Langkah berurutan untuk menyalakan seluruh platform dari keadaan bersih:
 
+### Langkah 1: Kloning Repositori Platform
 ```bash
-git clone <repo-url> rsch-apps
+git clone <repository-url-platform> rsch-apps
 cd rsch-apps
 ```
 
-### 2. Setup Environment
-
+### Langkah 2: Buat Environment Konfigurasi Awal
 ```bash
-# Salin template .env
+# Salin konfigurasi utama platform
 cp .env.example .env
 
-# Setup environment files
-cp env/dev.env.example env/dev.env      # Development
-cp env/prod.env.example env/prod.env    # Production
+# Salin konfigurasi port dan IP Host untuk dev dan prod
+cp env/dev.env.example env/dev.env
+cp env/prod.env.example env/prod.env
 ```
+> [!IMPORTANT]
+> Sesuaikan nilai `HOST_IP` di dalam file `env/dev.env` dan `env/prod.env` dengan alamat IP server lokal/produksi Anda agar redirection SSO dan reverse proxy Nginx berjalan dengan benar.
 
-### 3. Start Infrastructure
-
+### Langkah 3: Nyalakan Base Infrastructure
 ```bash
-# Jalankan semua service infrastruktur (MySQL, MinIO, phpMyAdmin)
 ./rsch infra up
 ```
+*Skrip ini akan memicu pembuatan volume penyimpanan, jaringan lokal, menyalakan MySQL, MinIO S3, dan Nginx.*
 
-Perintah ini menjalankan `docker compose -f compose/base/infra.yml up -d` yang akan:
-
-1. Membuat network `rsch-apps_default`
-2. Menjalankan MySQL (`database-service`)
-3. Menjalankan MinIO + membuat bucket (siimut, ikp, data-center)
-4. phpMyAdmin (dengan profile `dev` — aktif otomatis)
-
-> phpMyAdmin hanya aktif dengan profile `dev`. Untuk production via compose.yml root, profile tidak digunakan.
-
-### 4. Siapkan Aplikasi
-
+### Langkah 4: Jalankan Persiapan Aplikasi (Prepare)
 ```bash
-# Clone repo, setup .env, install dependencies
+# Jalankan prepare interaktif untuk tiap aplikasi
 ./rsch prepare siimut
-./rsch prepare ikp
 ./rsch prepare iam
+./rsch prepare ikp
 ./rsch prepare lms
 
-# Atau semua sekaligus
+# Atau siapkan semuanya sekaligus (interaktif berurutan)
 ./rsch prepare all
 ```
 
-Proses `prepare` melakukan:
-
-| Fase | Deskripsi | Lokasi Output |
-|---|---|---|
-| **Git** | Clone repository ke `sources/` | `sources/{app_dir}/` |
-| **Env** | Copy `.env.example` ke `.env` | `sources/{app_dir}/.env` |
-| **Deps** | Install composer + npm dependencies | Dalam `sources/{app_dir}/` |
-| **Prod Env** | Generate production env dengan secrets | `env/.env.prod.{app}` |
-
-> **IAM Server**: Tidak copy `.env.example` langsung — konfigurasi dibaca dari `apps/iam/.env.example`.
-
-### 5. Jalankan Semua Service
-
+### Langkah 5: Start Service Aplikasi secara Penuh
 ```bash
-# Development mode (default ports: 8010, 8210, 8110, 7000)
+# Untuk mode Development (Default)
 ./rsch up
 
-# Production mode (default ports: 8000, 8200, 8100, 7000)
+# Untuk mode Production (Port standar, APP_DEBUG dinonaktifkan)
 ./rsch up --prod
 ```
 
-### 6. Verifikasi
+---
 
+## 4. Referensi Perintah CLI (`./rsch`)
+
+CLI `./rsch` adalah pembungkus perintah Docker Compose. Semua konfigurasi dimuat secara otomatis di belakang layar.
+
+### Sintaks Umum
 ```bash
-# Cek semua container berjalan
-docker compose ps
-
-# Health check per aplikasi
-./rsch health siimut
-./rsch health ikp
-
-# Lihat logs
-./rsch logs siimut
+./rsch <command> [argument/options]
 ```
 
-Akses via browser:
+### Daftar Perintah Terintegrasi
 
-| App | Dev URL | Prod URL |
-|---|---|---|
-| **SIIMUT** | http://192.168.1.9:8010 | http://192.168.1.4:8000 |
-| **IKP** | http://192.168.1.9:8210 | http://192.168.1.4:8200 |
-| **IAM** | http://192.168.1.9:8110 | http://192.168.1.4:8100 |
-| **LMS** | http://192.168.1.9:7000 | http://192.168.1.4:7000 |
-| **MinIO Console** | http://localhost:9091 | http://localhost:9091 |
-| **phpMyAdmin** | http://localhost:8888 | — |
-
-> Default IP: `192.168.1.9` (dev), `192.168.1.4` (prod). Ubah di `env/dev.env` / `env/prod.env`.
+| Perintah | Deskripsi | Argumen Tambahan |
+| :--- | :--- | :--- |
+| `list` | Menampilkan semua aplikasi terdaftar di `repos.csv` | - |
+| `prepare` | Memulai inisialisasi aplikasi baru/lama | `<app>` / `all` / `--no-deps` |
+| `scaffold` | Membuat file boilerplate untuk aplikasi baru | `<new_app>` |
+| `build` | Mengompilasi image Docker lokal untuk aplikasi | `<app>` / `all` [opsional: `push`] |
+| `up` | Menyalakan service aplikasi dan proxy | `--dev` (default) atau `--prod` |
+| `down` | Mematikan service aplikasi dan proxy | -- |
+| `restart` | Me-restart kontainer app, worker, dan scheduler | `<app>` |
+| `logs` | Menampilkan logs runtime secara realtime (tail 100) | `<app>` |
+| `health` | Menjalankan skrip validasi status dan konektivitas | `<app>` |
+| `infra` | Mengontrol siklus hidup database, S3, dan proxy saja | `up` / `down` / `restart` |
 
 ---
 
-## CLI Reference
+## 5. Alur Kerja Mode Persiapan Aplikasi (Prepare Modes)
 
-### `./rsch prepare <app>`
+Skrip `./rsch prepare` memiliki **tiga mode persiapan** interaktif yang dirancang untuk skenario deployment yang berbeda.
 
-Siapkan aplikasi untuk deployment: clone repo, setup env, install dependencies.
-
-```bash
-# Siapkan satu aplikasi
-./rsch prepare siimut
-
-# Siapkan semua aplikasi
-./rsch prepare all
-
-# Lihat daftar aplikasi tersedia
-./rsch list
 ```
-
-Options:
-
-| Flag | Fungsi |
-|---|---|
-| `--no-deps` | Skip install composer & npm dependencies |
-
-### `./rsch build <app>`
-
-Build Docker image untuk aplikasi.
-
-```bash
-# Build image siimut
-./rsch build siimut
-
-# Build + push ke Docker Hub
-./rsch build siimut push
-
-# Build semua aplikasi + push
-./rsch build all push
+                          [ ./rsch prepare <app> ]
+                                      │
+                         Pilih Mode Setup Terminal
+                                      │
+         ┌────────────────────────────┼────────────────────────────┐
+         ▼                            ▼                            ▼
+[ 1: Generate Dockerfile ]     [ 2: Clone & Build ]       [ 3: Use Docker Image ]
+  • Laravel template             • Ambil kode Git           • Tanpa compile lokal
+  • Buat entrypoint.sh           • Compile assets           • Input Image:Tag
+  • Skip/Replace jika ada        • Generate secrets         • Simpan ke .app-modes
 ```
-
-Lihat juga: [Build & Push Image](#build--push-image)
-
-### `./rsch up [--dev|--prod]`
-
-Mulai semua service.
-
-```bash
-# Development (default)
-./rsch up              # setara --dev
-
-# Production
-./rsch up --prod
-```
-
-Apa yang dijalankan:
-
-| Service | Sumber |
-|---|---|
-| Nginx | `compose.yml` — service `web` |
-| App Services | `compose.yml` — extends `compose/apps/*.yml` |
-| Queue Workers | `compose.yml` — extends `compose/apps/*.yml` |
-| Schedulers | `compose.yml` — extends `compose/apps/*.yml` |
-
-### `./rsch down [--dev|--prod]`
-
-Hentikan semua service (volume tetap aman).
-
-```bash
-./rsch down
-```
-
-> Aman: `down` tidak pernah jalan dengan `--volumes`. Volume persisten dipertahankan.
-
-### `./rsch restart <app>`
-
-Restart service untuk satu aplikasi (app + queue + scheduler).
-
-```bash
-./rsch restart siimut
-```
-
-### `./rsch logs <app>`
-
-Lihat logs untuk service aplikasi.
-
-```bash
-# Stream logs siimut (app + queue — 100 baris terakhir)
-./rsch logs siimut
-```
-
-### `./rsch health <app>`
-
-Jalankan health check untuk aplikasi.
-
-```bash
-./rsch health siimut
-```
-
-Jika ada script spesifik di `scripts/health/check-{app}.sh`, akan dijalankan. Jika tidak, fallback ke `docker compose ps`.
-
-### `./rsch infra up|down|restart`
-
-Manajemen service infrastruktur saja (tanpa aplikasi).
-
-```bash
-./rsch infra up         # Start MySQL, MinIO, phpMyAdmin
-./rsch infra down       # Stop semua infra
-./rsch infra restart    # Restart semua infra
-```
-
-### `./rsch list`
-
-Tampilkan daftar aplikasi yang tersedia.
 
 ---
 
-## Environment & Secrets
+### 1️⃣ Mode 1: Generate Dockerfile
+*   **Tujuan**: Membuat konfigurasi penulisan kontainer Docker kustom di folder host untuk kemudian dikompilasi sendiri.
+*   **Prosedur**:
+    1.  Menanyakan framework target (saat ini default ke **Laravel**).
+    2.  Mengecek keberadaan `docker/<app>/Dockerfile`. Jika sudah ada, sistem memunculkan prompt:
+        *   `S` (Skip): Mempertahankan file yang sudah ada.
+        *   `R` (Replace): Menimpa file lama dengan template PHP-Alpine JIT bawaan.
+    3.  Membuat berkas `docker/<app>/entrypoint.sh` untuk otomasi cache clearing dan checking koneksi database saat kontainer berjalan.
 
-### Struktur Environment
+### 2️⃣ Mode 2: Clone Repo & Build (Kompilasi dari Source Code)
+*   **Tujuan**: Men-deploy aplikasi secara langsung dari kode sumber Git terbaru.
+*   **Prosedur**:
+    1.  **Git Phase**: Mengecek `sources/<app>`. Jika sudah ada repositori Git, user diberikan prompt:
+        *   `S` (Skip): Abaikan git pull, gunakan source code lokal yang ada.
+        *   `P` (Pull): Lakukan `git pull origin <branch>` untuk memperbarui kode.
+        *   `R` (Reset): Jalankan `git reset --hard origin/<branch>` untuk membuang perubahan lokal dan menarik versi terbaru dari server.
+    2.  **Environment Phase**: Menyalin `.env.example` ke `.env` lokal pada folder source code. User dapat memilih opsi skip atau overwrite file `.env`.
+    3.  **Dependencies Phase**: Menjalankan `composer install` dan `npm install && npm run build` untuk mengompilasi aset front-end (kecuali jika flag `--no-deps` digunakan).
+    4.  **Production Secrets Generation**: Membuat file `.env.prod.<app>` di folder `env/` yang berisi sandi acak dan kunci kriptografi yang aman.
+
+### 3️⃣ Mode 3: Gunakan Docker Image (Deployment Cepat Tanpa Kode Sumber)
+*   **Tujuan**: Menjalankan aplikasi langsung dari image yang sudah di-compile di repositori cloud (misal Docker Hub / GHCR). Skenario ini sangat ideal untuk server production guna menghindari proses compile aset yang memakan memori CPU server.
+*   **Prosedur**:
+    1.  Mengecek apakah sudah ada catatan image tersimpan di `.app-modes`. Jika ada, user ditanya apakah ingin mempertahankan (`Keep`) atau memperbarui (`Update`).
+    2.  Meminta input teks alamat image lengkap beserta tag-nya (contoh: `ghcr.io/juniyasyos/siimut:v2.0.0`).
+    3.  Menyimpan pasangan konfigurasi tersebut ke berkas `.app-modes` agar docker-compose merujuk ke image eksternal ini saat proses startup dijalankan.
+
+---
+
+## 6. Manajemen Environment & Secrets
+
+Konfigurasi keamanan dirancang berlapis menggunakan pemisahan file environment di direktori `env/`:
 
 ```
 env/
-├── common.env       # Variabel bersama untuk semua service (MySQL root creds)
-├── dev.env          # Development: HOST_IP, port mapping
-└── prod.env         # Production: HOST_IP, port mapping
+├── common.env               # Global: Kredensial root database MySQL
+├── dev.env                  # Dev: Port map (kepala 8xx10) & IP Host lokal
+├── prod.env                 # Prod: Port map (kepala 8xx00) & IP Host production
+└── .env.prod.<app>          # Dinamis: Secrets unik hasil generate (Gitignored)
 ```
 
-### Variabel Penting
+> [!CAUTION]
+> File `.env.prod.*` berisi data kredensial rahasia (seperti kunci enkripsi aplikasi, sandi database unik, dan private key). File ini secara otomatis didaftarkan ke `.gitignore`. **JANGAN PERNAH** menghapus baris tersebut atau memasukkan berkas-berkas ini ke dalam repositori Git!
 
-#### `env/common.env`
+### Kunci Enkripsi Khusus (Otomatisasi Prepare)
 
-| Variabel | Default | Keterangan |
-|---|---|---|
-| `MYSQL_ROOT_PASSWORD` | `rootpass123` | Password root MySQL |
-| `MYSQL_RANDOM_ROOT_PASSWORD` | `no` | Nonaktifkan random password |
-| `MYSQL_CHARSET` | `utf8mb4` | Character set |
-| `MYSQL_COLLATION` | `utf8mb4_unicode_ci` | Collation |
+Saat persiapan aplikasi di Mode 2 dijalankan, beberapa rahasia berikut akan di-generate secara otomatis:
+1.  **`APP_KEY`**: Enkripsi bawaan Laravel (menggunakan `openssl` secure byte generator).
+2.  **`DB_PASSWORD` & `MYSQL_ROOT_PASSWORD`**: Sandi acak base64 sepanjang 16 karakter.
+3.  **`IAM_JWT_SECRET`**: Digunakan untuk validasi token OAuth2 JWT. Khusus untuk aplikasi **SIIMUT**, skrip prepare akan secara otomatis membaca dan menyinkronkan nilai JWT secret yang ada dari berkas `env/.env.prod.iam` agar integrasi SSO langsung terjalin tanpa konfigurasi manual.
+4.  **Passport RSA Keys (Khusus IAM Server)**: Laravel Passport memerlukan berkas kunci privat dan publik RSA. Skrip akan membuat sepasang kunci enkripsi 2048-bit dan menulisnya ke dalam berkas `env/.env.prod.iam` dengan format multi-line yang aman.
 
-#### `env/dev.env`
+---
 
-| Variabel | Default | Keterangan |
-|---|---|---|
-| `HOST_IP` | `192.168.1.9` | IP host untuk development |
-| `SIIMUT_HOST_PORT` | `8010` | Port SIIMUT |
-| `IKP_HOST_PORT` | `8210` | Port IKP |
-| `IAM_HOST_PORT` | `8110` | Port IAM |
-| `LMS_HOST_PORT` | `7000` | Port LMS |
+## 7. Prosedur Build & Registrasi Image
 
-#### `env/prod.env`
-
-| Variabel | Default | Keterangan |
-|---|---|---|
-| `HOST_IP` | `192.168.1.4` | IP host production |
-| `SIIMUT_HOST_PORT` | `8000` | Port SIIMUT |
-| `IKP_HOST_PORT` | `8200` | Port IKP |
-| `IAM_HOST_PORT` | `8100` | Port IAM |
-
-### Production Secrets
-
-Secrets di-generate otomatis saat `./rsch prepare`:
-
-```
-env/.env.prod.siimut    # APP_KEY, DB_PASSWORD, JWT_SECRET
-env/.env.prod.iam       # APP_KEY, JWT_SECRET, Passport RSA Keys
-env/.env.prod.lms       # APP_KEY, DB_PASSWORD
-```
-
-> **Security Note**: File `.env.prod.*` masuk `.gitignore`. Jangan pernah commit secrets!
-
-#### IAM Passport Keys
-
-IAM Server butuh RSA key pair untuk Laravel Passport. Key di-generate otomatis di fase `prepare` dan disimpan di `env/.env.prod.iam`.
-
-**Jika Passport key bermasalah**:
+Proses kompilasi image Docker diatur secara sentral di file `compose/build.yml`. Anda dapat memicu build dengan perintah rsch CLI:
 
 ```bash
-# Regenerate di dalam container
-docker exec -it iam-app php artisan passport:keys --force
+# Build image SIIMUT secara lokal
+./rsch build siimut
+
+# Build dan berikan tag terbaru kemudian push ke Docker Hub
+# (Pastikan Anda sudah login ke Docker menggunakan perintah 'docker login')
+DOCKER_HUB_USER=namauser ./rsch build siimut push
+
+# Build seluruh aplikasi dan push sekaligus
+DOCKER_HUB_USER=namauser ./rsch build all push
 ```
 
-### Konfigurasi Aplikasi per-App
-
-Setiap aplikasi punya konfigurasi di `apps/{name}/`:
-
-```
-apps/siimut/
-├── app.yml             # Metadata aplikasi (nama, repo, branch, port, database)
-├── Dockerfile          # Build image
-└── .env.example        # Template environment
-```
-
-#### Format `app.yml`
-
-```yaml
-name: siimut
-repo: https://github.com/juniyasyos/si-imut.git
-branch: main
-source_dir: siimut
-image: juniyasyos/siimut
-version: v2.0.0
-port: 8000
-domain: siimut.local
-database: siimut_db
-db_user: siimut_user
-queue: true
-scheduler: true
-php_version: "8.4"
-description: SIIMUT - Sistem Informasi Imunisasi
+### Override Versi Image
+Secara default, skrip build akan membaca nomor versi yang tertulis di file metadata `apps/<app>/app.yml`. Anda bisa menimpanya dengan mendefinisikan environment variable saat kompilasi:
+```bash
+SIIMUT_VERSION=v2.5.0 ./rsch build siimut
 ```
 
 ---
 
-## Build & Push Image
+## 8. Panduan Diagnostik & Troubleshooting
 
-### Alur Build
+Jika terjadi gangguan operasional atau kegagalan konektivitas, gunakan langkah diagnostik berikut secara berurutan:
 
-```
-Source Code → Dockerfile → Docker Image → Tag → Push ke Registry
-(sources/)    (apps/*/)    (local)       (v*)   (Docker Hub)
-```
-
-### Build Image
-
+### Kontainer Mengalami Restart Loop
+Gunakan perintah CLI logs untuk menganalisis error PHP runtime di awal boot:
 ```bash
-# Build satu aplikasi
-docker compose -f compose/build.yml build siimut
-
-# Atau via script
-./scripts/build.sh siimut
-./scripts/build.sh siimut push    # Build + Push ke Docker Hub
-./scripts/build.sh all push       # Build + Push semua aplikasi
+./rsch logs siimut
 ```
-
-### Set Version
-
+Jika kontainer mati sebelum sempat menulis log, periksa menggunakan status docker engine:
 ```bash
-# Via file (default)
-echo "v2.0.0" > VERSION
-
-# Via environment variable (override)
-SIIMUT_VERSION=v2.1.0 ./scripts/build.sh siimut push
-```
-
-Per-service version override:
-
-| Variable | Applies to | Default |
-|---|---|---|
-| `SIIMUT_VERSION` | SIIMUT | `v2.0.0` |
-| `IKP_VERSION` | IKP | `v1.0.0` |
-| `IAM_VERSION` | IAM Server | `v1.0.0` |
-| `LMS_VERSION` | LMS | `v1.0.0` |
-
-### Build Configuration
-
-`compose/build.yml` berisi semua konfigurasi build:
-
-```yaml
-services:
-  siimut:
-    build:
-      context: .
-      dockerfile: apps/siimut/Dockerfile
-      args:
-        APP_DIR: siimut
-        DB_HOST: database-service
-        # ... build args untuk optimasi image
-    image: siimut:v2.0.0
-```
-
-### Push to Docker Hub
-
-```bash
-# Login dulu
-docker login
-
-# Build + Push
-DOCKER_HUB_USER=juniyasyos ./scripts/build.sh siimut push
-```
-
-Images di-tag sebagai:
-- `juniyasyos/siimut:v2.0.0` (versioned)
-- `juniyasyos/siimut:latest` (latest)
-
----
-
-## Troubleshooting
-
-### 1. Container Restart Loop
-
-```bash
-# Cek logs
-docker compose logs app-siimut --tail=50
-
-# Cek health
 docker compose ps app-siimut
-
-# Restart
-./rsch restart siimut
 ```
 
-### 2. Database Connection Error
+### Masalah Koneksi Database (Connection Refused)
+1.  Pastikan kontainer basis data terpusat menyala:
+    ```bash
+    ./rsch infra up
+    ```
+2.  Lakukan ping internal ke database menggunakan mysqladmin bawaan kontainer:
+    ```bash
+    docker compose -f compose/base/infra.yml exec db mysqladmin ping -uroot -prootpass123
+    ```
 
+### Masalah DNS / Rute Jaringan Docker
+Jika aplikasi tidak dapat saling berkomunikasi (misal SIIMUT tidak bisa menghubungi IAM Server SSO), kemungkinan terjadi konflik alokasi IP di sistem Docker host Anda. Jalankan alat perbaikan jaringan:
 ```bash
-# Pastikan database-service berjalan
-docker compose -f compose/base/infra.yml ps
-
-# Cek health
-docker compose -f compose/base/infra.yml exec db mysqladmin ping -uroot -prootpass123
-
-# Cek network
-docker network inspect rsch-apps_default
-```
-
-### 3. MinIO Bucket Tidak Terbuat
-
-```bash
-# Jalankan ulang minio-init
-docker compose -f compose/base/infra.yml start minio-init
-
-# Atau manual via mc
-docker exec -it minio mc ls myminio/
-```
-
-### 4. Permission Issues
-
-```bash
-# Cek permission volume
-docker exec siimut-app ls -la /var/www/siimut/storage
-
-# Fix permission
-docker exec siimut-app chmod -R 775 /var/www/siimut/storage
-docker exec siimut-app chown -R www-data:www-data /var/www/siimut/storage
-```
-
-### 5. Cache & Config Clear
-
-```bash
-# Clear Laravel cache
-docker exec siimut-app php artisan optimize:clear
-
-# Clear route & config cache
-docker exec siimut-app php artisan config:clear
-docker exec siimut-app php artisan route:clear
-docker exec siimut-app php artisan view:clear
-```
-
-### 6. Diagnostik Tools
-
-Project menyediakan script diagnostik:
-
-```bash
-# Diagnostik umum
-./scripts/maintenance/diagnose.sh
-
-# Diagnostik spesifik
-./scripts/maintenance/diagnose-autoload.sh     # Composer autoload
-./scripts/maintenance/diagnose-iam.sh           # IAM Server
-./scripts/maintenance/diagnose-livewire.sh      # Livewire
-./scripts/maintenance/diagnose-signatory.sh     # Signatory
-
-# Diagnostik network
 ./scripts/maintenance/fix-network.sh
+```
+*Skrip ini akan menghentikan seluruh kontainer, menghapus network virtual yang rusak, me-reset DNS lokal Docker daemon, dan menyalakan kembali interface network secara bersih.*
 
-# Health check
-./scripts/health/check-jwt.sh                   # JWT validation
-./scripts/health/check-minio.sh                 # MinIO connectivity
+### Skrip Pemeriksaan Mandiri (Health Checks)
+Jalankan modul penguji bawaan platform:
+```bash
+# Uji kesehatan otentikasi SSO IAM Server
+./rsch health iam
+
+# Uji integrasi file storage dengan MinIO S3
+./scripts/health/check-minio.sh
+
+# Diagnostik mandiri umum (Composer, Signatory, Livewire)
+./scripts/maintenance/diagnose.sh
 ```
 
 ---
 
-## Referensi File
+## 9. Panduan Menambahkan Aplikasi Baru
 
-### Docker Compose Files
+Untuk mendaftarkan aplikasi baru ke dalam platform manager, ikuti langkah-langkah di bawah ini:
 
-| File | Fungsi | Cara Pakai |
-|---|---|---|
-| `compose.yml` | Main manifest — semua service aplikasi | `./rsch up` |
-| `compose/base/infra.yml` | Aggregator infrastruktur | `./rsch infra up` |
-| `compose/base/network.yml` | Network + volume global | `include` oleh infra.yml |
-| `compose/base/database.yml` | MySQL service | `include` oleh infra.yml |
-| `compose/base/minio.yml` | MinIO service | `include` oleh infra.yml |
-| `compose/base/phpmyadmin.yml` | phpMyAdmin (profile dev) | `include` oleh infra.yml |
-| `compose/base/php-base.yml` | Template PHP app/worker/scheduler | `extends` oleh apps/*.yml |
-| `compose/apps/{app}.yml` | Service per-aplikasi | `extends` oleh compose.yml |
-| `compose/profiles/dev.yml` | Development override | `-f compose.yml -f profiles/dev.yml` |
-| `compose/profiles/prod.yml` | Production override | `-f compose.yml -f profiles/prod.yml` |
-| `compose/build.yml` | Build manifest | `docker compose -f compose/build.yml build` |
+### Langkah 1: Jalankan Perintah Scaffold
+Jalankan CLI scaffold untuk membuat seluruh file boilerplate secara otomatis:
+```bash
+./rsch scaffold nama-app-baru
+```
+Terminal akan meminta input data secara interaktif:
+*   **Nama Aplikasi & Deskripsi**
+*   **URL Repositori Git & Target Branch**
+*   **Port Forwarding** (Skrip secara otomatis mendeteksi port tertinggi yang terpakai dan menyarankan port kosong berikutnya).
+*   **Spesifikasi Database** (Nama database, user, dan sandi).
+*   **Opsi Driver**: Status penggunaan Queue Worker dan Scheduler Task.
 
-### Scripts
+Selesai mengisi, skrip scaffolding akan otomatis mengeksekusi Python parser di balik layar untuk melakukan injeksi blok konfigurasi secara dinamis ke berkas:
+1.  `compose.yml` (Pendaftaran service dan volume persistent baru).
+2.  `compose/base/web.yml` (Pendaftaran port binding dan permission folder public).
+3.  `compose/build.yml` (Pendaftaran instruksi kompilasi image otomatis).
 
-| Script | Fungsi |
-|---|---|
-| `scripts/prepare.sh` | Clone, setup env, install dependencies |
-| `scripts/build.sh` | Build & push Docker image |
-| `scripts/deploy.sh` | Start/stop stack (dipanggil oleh rsch CLI) |
+### Langkah 2: Daftarkan ke Konfigurasi Nginx Web
+Edit berkas `docker/nginx/nginx-multi-apps.conf` untuk menambahkan routing subdomain/domain baru:
+```nginx
+server {
+    listen 80;
+    server_name nama-app-baru.local;
 
-### Docker Config
+    location / {
+        proxy_pass http://app-nama-app-baru:9000;
+        include php_fastcgi_params; # Sesuaikan dengan format template
+    }
+}
+```
 
-| Path | Isi |
-|---|---|
-| `docker/nginx/nginx.conf` | Konfigurasi utama Nginx |
-| `docker/nginx/nginx-multi-apps.conf` | Virtual host multi-app |
-| `docker/php/Dockerfile.production` | PHP production Dockerfile |
-| `docker/php/entrypoint.sh` | Entrypoint dev |
-| `docker/php/entrypoint-prod.sh` | Entrypoint production |
-| `docker/php/php.ini` | PHP configuration |
-| `docker/php/supervisord.conf` | Supervisor untuk queue/scheduler |
-| `docker/db/my.cnf` | MySQL configuration |
-| `docker/db/sql/` | SQL initialization scripts |
+### Langkah 3: Eksekusi Prepare dan Jalankan
+```bash
+# Siapkan aplikasi baru (Clone repo & build)
+./rsch prepare nama-app-baru
+
+# Jalankan service kontainer baru
+./rsch up
+```
 
 ---
 
-## Menambah Aplikasi Baru
+## 10. Daftar Referensi File Konfigurasi
 
-1. Buat direktori di `apps/{nama}/`
-2. Isi dengan:
-   - `app.yml` — metadata aplikasi
-   - `Dockerfile` — build instruction
-   - `.env.example` — template environment
-3. Tambahkan ke `compose/apps/{nama}.yml` (extends php-base)
-4. Tambahkan ke `compose.yml` (extends service)
-5. Tambah konfigurasi Nginx di `docker/nginx/`
-6. Tambah volume di `compose.yml`
-7. Tambah ke `repos.csv`
-8. Jalankan `./rsch prepare {nama}`
-
-Contoh template app.yml:
-
-```yaml
-name: myapp
-repo: https://github.com/org/myapp.git
-branch: main
-source_dir: myapp
-image: juniyasyos/myapp
-version: v1.0.0
-port: 9000
-domain: myapp.local
-database: myapp_db
-db_user: myapp_user
-queue: true
-scheduler: false
-php_version: "8.4"
-description: Aplikasi Baru
-```
+| Lokasi File | Peran Utama | Kapan Harus Diedit |
+| :--- | :--- | :--- |
+| `compose.yml` | Konfigurasi utama aggregator kontainer aplikasi | Saat mendaftarkan service penunjang baru secara global |
+| `compose/base/network.yml` | Konfigurasi subnet IP, driver volume, dan network | Saat ingin mengubah rentang IP subnet jaringan internal |
+| `compose/base/web.yml` | Binds Nginx ports & volume caching bootstrap | Saat mengubah port utama web atau permission directory |
+| `compose/base/database.yml` | Konfigurasi MySQL Server dan setup database | Saat melakukan upgrade versi image database engine |
+| `compose/base/php-base.yml` | Template setingan dasar PHP PHP-FPM / Worker | Saat ingin mengubah batas memory limit dasar PHP kontainer |
+| `docker/nginx/nginx.conf` | Konfigurasi dasar web server Nginx proxy | Saat ingin mengaktifkan gzip compression atau setting SSL |
+| `docker/db/my.cnf` | Konfigurasi performa database MySQL | Saat tuning query cache database produksi |
+| `repos.csv` | Daftar flat-file registry repositori Git tepercaya | Saat merubah alamat repositori URL Git aplikasi |
