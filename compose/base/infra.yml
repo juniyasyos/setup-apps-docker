@@ -8,4 +8,5 @@ include:
   - path: ./database.yml
   - path: ./minio.yml
   - path: ./phpmyadmin.yml
+  - path: ./web.yml
   # - path: ./portainer.yml
