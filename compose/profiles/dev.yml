@@ -10,7 +10,7 @@ services:
       - "${IAM_HOST_PORT:-8110}:8100"
       - "${LMS_HOST_PORT:-7000}:7000"
 
-  # Enable phpMyAdmin in dev (commented out by default in infrastructure.yml)
+  # Enable phpMyAdmin in dev (has profile: dev, auto-starts with --profile dev)
   # phpmyadmin is always on; no profile needed
 
   # Enable xdebug in the future...

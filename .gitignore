@@ -27,6 +27,9 @@ Repos/
 sources/*
 !sources/.gitkeep
 
+# Old source directory (legacy, replaced by sources/)
+site/
+
 # ===========================================
 # PRODUCTION ENVIRONMENT FILES (SECRETS)
 # ===========================================

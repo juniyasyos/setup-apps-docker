@@ -5,7 +5,7 @@
 
 # Dapatkan base directory (direktori tempat script berada)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ENV_DIR="${SCRIPT_DIR}/env"
+ENV_DIR="${SCRIPT_DIR}/../../env"
 
 echo "=== JWT SECRET VERIFICATION ==="
 echo "Script directory: $SCRIPT_DIR"

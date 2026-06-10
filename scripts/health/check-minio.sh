@@ -2,7 +2,7 @@
 
 set -u
 
-COMPOSE_FILE="docker-compose-multi-apps.yml"
+COMPOSE_FILE="compose.yml"
 MINIO_HEALTH_PATH="/minio/health/ready"
 
 GREEN='\033[0;32m'

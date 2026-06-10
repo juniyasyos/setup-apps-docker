@@ -3,7 +3,7 @@ name: service-siimut
 services:
   app:
     extends:
-      file: ../base/common.yml
+      file: ../base/php-base.yml
       service: php-app-base
     image: siimut:v2.0.0
     container_name: siimut-app
@@ -53,7 +53,7 @@ services:
 
   queue:
     extends:
-      file: ../base/common.yml
+      file: ../base/php-base.yml
       service: php-worker-base
     image: siimut:v2.0.0
     container_name: siimut-queue
@@ -85,7 +85,7 @@ services:
 
   scheduler:
     extends:
-      file: ../base/common.yml
+      file: ../base/php-base.yml
       service: php-scheduler-base
     image: siimut:v2.0.0
     container_name: siimut-scheduler

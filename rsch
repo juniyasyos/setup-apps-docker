@@ -174,17 +174,17 @@ cmd_infra() {
     case "$action" in
         up)
             log_info "Starting infrastructure services..."
-            docker compose -f "${SCRIPT_DIR}/compose/base/infrastructure.yml" up -d
+            docker compose -f "${SCRIPT_DIR}/compose/base/infra.yml" up -d
             log_success "Infrastructure started"
             ;;
         down)
             log_info "Stopping infrastructure services..."
-            docker compose -f "${SCRIPT_DIR}/compose/base/infrastructure.yml" down
+            docker compose -f "${SCRIPT_DIR}/compose/base/infra.yml" down
             log_success "Infrastructure stopped"
             ;;
         restart)
             log_info "Restarting infrastructure services..."
-            docker compose -f "${SCRIPT_DIR}/compose/base/infrastructure.yml" restart
+            docker compose -f "${SCRIPT_DIR}/compose/base/infra.yml" restart
             log_success "Infrastructure restarted"
             ;;
         *)

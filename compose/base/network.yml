@@ -1,0 +1,10 @@
+# Network Definition for RSCH Infrastructure
+# Defines the shared network used by all services.
+
+networks:
+  default:
+    name: rsch-apps_default
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

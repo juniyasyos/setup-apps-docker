@@ -1,4 +1,5 @@
-name: service-app-common
+# PHP Application Base Services — Shared templates for Laravel apps
+# Extended by compose/apps/*.yml for each application.
 
 services:
   php-app-base:

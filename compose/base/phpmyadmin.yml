@@ -1,0 +1,40 @@
+# phpMyAdmin — Web-based MySQL Administration
+
+services:
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    restart: unless-stopped
+    profiles:
+      - dev
+    ports:
+      - "${PMA_PORT:-8888}:80"
+    environment:
+      PMA_HOST: db
+      PMA_PORT: 3306
+      PMA_ARBITRARY: 1
+      PMA_ABSOLUTE_URI: http://localhost:${PMA_PORT:-8888}/
+      PMA_BLOWFISH_SECRET: password
+      MYSQL_ROOT_PASSWORD: rootpass123
+      UPLOAD_LIMIT: 1024M
+      MEMORY_LIMIT: 1024M
+      POST_MAX_SIZE: 1024M
+      MAX_EXECUTION_TIME: 600
+      MAX_INPUT_TIME: 600
+      MAX_INPUT_VARS: 10000
+    volumes:
+      - phpmyadmin_sessions:/sessions
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+        reservations:
+          memory: 128M
+          cpus: "0.05"
+
+volumes:
+  phpmyadmin_sessions:
+    driver: local

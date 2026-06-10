@@ -9,7 +9,7 @@ set -o errexit
 set -o pipefail
 set -o nounset
 
-COMPOSE_FILE="./docker-compose-multi-apps.yml"
+COMPOSE_FILE="./compose.yml"
 CONTAINER="app-siimut"
 TARGET_DIR="/var/www/siimut/app"
 FIX=0

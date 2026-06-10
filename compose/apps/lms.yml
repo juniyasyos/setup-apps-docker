@@ -3,7 +3,7 @@ name: service-lms
 services:
   app:
     extends:
-      file: ../base/common.yml
+      file: ../base/php-base.yml
       service: php-app-base
     image: lms-app:v1.0.0
     container_name: lms-app
@@ -40,7 +40,7 @@ services:
 
   queue:
     extends:
-      file: ../base/common.yml
+      file: ../base/php-base.yml
       service: php-worker-base
     image: lms-app:v1.0.0
     container_name: lms-queue
@@ -75,7 +75,7 @@ services:
 
   scheduler:
     extends:
-      file: ../base/common.yml
+      file: ../base/php-base.yml
       service: php-scheduler-base
     image: lms-app:v1.0.0
     container_name: lms-scheduler

@@ -1,0 +1,44 @@
+# MySQL Database Service — Production Optimized
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: database-service
+    restart: unless-stopped
+    volumes:
+      - db_data:/var/lib/mysql
+      - db_logs:/var/log/mysql
+      - ../../docker/db/my.cnf:/etc/mysql/conf.d/my.cnf:ro
+      - ../../docker/db/sql:/docker-entrypoint-initdb.d:ro
+      - ../../docker/db/save/:/etc/mysql/save/
+    env_file:
+      - ../../env/common.env
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass123
+      MYSQL_RANDOM_ROOT_PASSWORD: "no"
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
+      MYSQL_INIT_CONNECT: "SET SESSION sql_mode=''"
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+          cpus: "2.0"
+        reservations:
+          memory: 512M
+          cpus: "1"
+    command:
+      - --max-connections=60
+      - --skip-name-resolve
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-prootpass123", "--silent"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+volumes:
+  db_data:
+    driver: local
+  db_logs:
+    driver: local

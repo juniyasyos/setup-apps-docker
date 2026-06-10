@@ -185,10 +185,10 @@ phase_git() {
 
     local site_dir="${SCRIPT_DIR}/sources/${APP_DIR}"
 
-    # Create site directory if not exists
-    if [ ! -d "${SCRIPT_DIR}/site" ]; then
-        echo "📁 Creating site directory..."
-        mkdir -p "${SCRIPT_DIR}/site"
+    # Create sources directory if not exists
+    if [ ! -d "${SCRIPT_DIR}/../sources" ]; then
+        echo "📁 Creating sources directory..."
+        mkdir -p "${SCRIPT_DIR}/../sources"
     fi
 
     if [ -d "${site_dir}/.git" ]; then
@@ -347,7 +347,7 @@ phase_prod_env() {
         return 0
     fi
 
-    local prod_env_file="${SCRIPT_DIR}/apps/prod.${APP_NAME}"
+    local prod_env_file="${SCRIPT_DIR}/../env/.env.prod.${APP_NAME}"
 
     # Check if production .env already exists
     if [ -f "${prod_env_file}" ] && [ ! -t 0 ]; then
@@ -365,13 +365,13 @@ phase_prod_env() {
     fi
 
     # Copy template
-    if [ ! -f "${SCRIPT_DIR}/apps/${APP_NAME}/.env.example" ]; then
+    if [ ! -f "${SCRIPT_DIR}/../apps/${APP_NAME}/.env.example" ]; then
         log_error "Template not found: apps/${APP_NAME}/.env.example"
         exit 1
     fi
 
     echo "📋 Creating production env from template..."
-    cp "${SCRIPT_DIR}/apps/${APP_NAME}/.env.example" "${prod_env_file}"
+    cp "${SCRIPT_DIR}/../apps/${APP_NAME}/.env.example" "${prod_env_file}"
     log_success "Copied apps/${APP_NAME}/.env.example → ${prod_env_file}"
 
     echo ""
@@ -421,19 +421,19 @@ phase_prod_env() {
 
         siimut)
             # Sync IAM_JWT_SECRET from IAM's prod env if available
-            if [ -f "${SCRIPT_DIR}/apps/prod.iam" ]; then
+            if [ -f "${SCRIPT_DIR}/../env/.env.prod.iam" ]; then
                 local jwt
-                jwt=$(grep '^IAM_JWT_SECRET=' "${SCRIPT_DIR}/apps/prod.iam" | cut -d '=' -f 2)
+                jwt=$(grep '^IAM_JWT_SECRET=' "${SCRIPT_DIR}/../env/.env.prod.iam" | cut -d '=' -f 2)
                 if [ -n "$jwt" ]; then
                     IAM_JWT_SECRET="$jwt"
-                    echo "  ✓ IAM_JWT_SECRET synced from apps/prod.iam"
+                    echo "  ✓ IAM_JWT_SECRET synced from env/.env.prod.iam"
                 else
                     IAM_JWT_SECRET=$(generate_jwt_secret)
                     echo "  ⚠️  Could not parse IAM_JWT_SECRET from .env.prod.iam, generated new one"
                 fi
             else
                 IAM_JWT_SECRET=$(generate_jwt_secret)
-                echo "  ⚠️  apps/prod.iam not found, generating new IAM_JWT_SECRET"
+                echo "  ⚠️  env/.env.prod.iam not found, generating new IAM_JWT_SECRET"
                 echo "      (Recommend running ./prepare.sh iam first!)"
             fi
             sed -i "s|^IAM_JWT_SECRET=.*|IAM_JWT_SECRET=${IAM_JWT_SECRET}|" "${temp_file}"
@@ -533,10 +533,10 @@ main() {
 
     # Show next steps hint
     echo "Langkah selanjutnya:"
-    if [ -f "${SCRIPT_DIR./scripts/build.sh" ]; then
+    if [ -f "${SCRIPT_DIR}/../scripts/build.sh" ]; then
         echo "  • Build Docker images:  ./scripts/build.sh [app]"
     fi
-    if ls "${SCRIPT_DIR}"/apps/prod.* 1>/dev/null 2>&1; then
+    if ls "${SCRIPT_DIR}"/env/.env.prod.* 1>/dev/null 2>&1; then
         echo "  • File production .env sudah dibuat di folder env/ (JANGAN di-commit!)"
     fi
     echo ""

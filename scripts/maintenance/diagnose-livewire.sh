@@ -4,7 +4,7 @@
 # Server Livewire 404 - Quick Diagnosis & Recovery Script
 # 
 # Use this script to quickly diagnose and fix Livewire 404 issues 
-# on production server with docker-compose-multi-apps.yml
+# on production server with compose.yml
 ###############################################################################
 
 set -e
@@ -15,7 +15,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-DOCKER_COMPOSE_FILE="${1:-docker-compose-multi-apps.yml}"
+DOCKER_COMPOSE_FILE="${1:-compose.yml}"
 COMPOSE_CMD="docker compose"
 
 echo -e "${BLUE}======================================"
@@ -26,7 +26,7 @@ echo "======================================${NC}\n"
 if [ ! -f "$DOCKER_COMPOSE_FILE" ]; then
     echo -e "${RED}❌ ERROR: File not found: $DOCKER_COMPOSE_FILE${NC}"
     echo "   Current directory: $(pwd)"
-    echo "   Please run from directory containing docker-compose-multi-apps.yml"
+    echo "   Please run from directory containing compose.yml"
     exit 1
 fi
 

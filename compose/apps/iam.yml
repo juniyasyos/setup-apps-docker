@@ -3,7 +3,7 @@ name: service-iam
 services:
   app:
     extends:
-      file: ../base/common.yml
+      file: ../base/php-base.yml
       service: php-app-base
     image: iam-server:v1.0.0
     container_name: iam-app
@@ -46,7 +46,7 @@ services:
 
   queue:
     extends:
-      file: ../base/common.yml
+      file: ../base/php-base.yml
       service: php-worker-base
     image: iam-server:v1.0.0
     container_name: iam-queue
@@ -88,7 +88,7 @@ services:
 
   scheduler:
     extends:
-      file: ../base/common.yml
+      file: ../base/php-base.yml
       service: php-scheduler-base
     image: iam-server:v1.0.0
     container_name: iam-scheduler
