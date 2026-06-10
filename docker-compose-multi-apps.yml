@@ -8,24 +8,24 @@ services:
     image: nginx:alpine
     container_name: ${STACK_NAME:-multi}-web
     ports:
-      - "${SIIMUT_HOST_PORT:-8000}:8000"  # SIIMUT
-      - "${IKP_HOST_PORT:-8200}:8200"  # IKP
-      - "${IAM_HOST_PORT:-8100}:8100"  # IAM Server
+      # - "${SIIMUT_HOST_PORT:-8000}:8000"  # SIIMUT
+      # - "${IKP_HOST_PORT:-8200}:8200"  # IKP
+      # - "${IAM_HOST_PORT:-8100}:8100"  # IAM Server
       - "${LMS_HOST_PORT:-7000}:7000"  # LMS Server
     volumes:
       - ./DockerNew/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./DockerNew/nginx/nginx-multi-apps.conf:/etc/nginx/conf.d/default.conf:ro
       # SIIMUT
-      - siimut_public:/var/www/siimut/public:ro
-      - siimut_storage:/var/www/siimut/storage:ro
-      # IKP
-      - ikp_public:/var/www/ikp/public:ro
-      - ikp_storage:/var/www/ikp/storage:ro
-      # LMS
+      # - siimut_public:/var/www/siimut/public:ro
+      # - siimut_storage:/var/www/siimut/storage:ro
+      # # IKP
+      # - ikp_public:/var/www/ikp/public:ro
+      # - ikp_storage:/var/www/ikp/storage:ro
+      # # LMS
       - lms_public:/var/www/lms-app/public:ro
       - lms_storage:/var/www/lms-app/storage:ro
       # # IAM
-      - iam_public:/var/www/iam/public:ro
+      # - iam_public:/var/www/iam/public:ro
       - nginx_logs:/var/log/nginx
     restart: unless-stopped
     # Production resource limits
