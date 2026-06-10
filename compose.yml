@@ -9,46 +9,70 @@ services:
   # SIIMUT
   # Image: juniyasyos/siimut:VERSION
   app-siimut:
+    extends:
       file: compose/apps/siimut.yml
+      service: app
 
   queue-siimut:
+    extends:
       file: compose/apps/siimut.yml
+      service: queue
 
   scheduler-siimut:
+    extends:
       file: compose/apps/siimut.yml
+      service: scheduler
 
   # IKP
   # Image: juniyasyos/ikp:VERSION
   app-ikp:
+    extends:
       file: compose/apps/ikp.yml
+      service: app
 
   queue-ikp:
+    extends:
       file: compose/apps/ikp.yml
+      service: queue
 
   scheduler-ikp:
+    extends:
       file: compose/apps/ikp.yml
+      service: scheduler
 
   # IAM Server
   # Image: juniyasyos/iam-server:VERSION
   app-iam:
+    extends:
       file: compose/apps/iam.yml
+      service: app
 
   queue-iam:
+    extends:
       file: compose/apps/iam.yml
+      service: queue
 
   scheduler-iam:
+    extends:
       file: compose/apps/iam.yml
+      service: scheduler
 
   # LMS
   # Image: juniyasyos/lms-app:VERSION
   app-lms:
+    extends:
       file: compose/apps/lms.yml
+      service: app
 
   queue-lms:
+    extends:
       file: compose/apps/lms.yml
+      service: queue
 
   scheduler-lms:
+    extends:
       file: compose/apps/lms.yml
+      service: scheduler
 
 ####################################################################################################
 # Named Volumes
