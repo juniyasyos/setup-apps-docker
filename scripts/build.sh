@@ -24,8 +24,9 @@ set -e
 # Configuration
 # ============================================
 DOCKER_HUB_USER="${DOCKER_HUB_USER:-}"
-COMPOSE_FILE="compose/build.yml"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+COMPOSE_FILE="compose/build.yml"
 
 # Detect Docker Hub username if not explicitly provided
 if [ -z "$DOCKER_HUB_USER" ] && [ -f "$HOME/.docker/config.json" ]; then
@@ -52,8 +53,8 @@ DOCKER_HUB_USER="${DOCKER_HUB_USER:-juniyasyos}"
 
 # Read version: ENV VAR > VERSION file > 'latest'
 if [ -z "$VERSION" ]; then
-    if [ -f "$SCRIPT_DIR/VERSION" ]; then
-        VERSION=$(cat "$SCRIPT_DIR/VERSION" | tr -d '[:space:]')
+    if [ -f "$PROJECT_ROOT/VERSION" ]; then
+        VERSION=$(cat "$PROJECT_ROOT/VERSION" | tr -d '[:space:]')
     else
         VERSION="latest"
     fi
@@ -197,13 +198,13 @@ build_image() {
 
     if [ "$TARGET" = "all" ]; then
         if SIIMUT_VERSION="$SIIMUT_VERSION" IKP_VERSION="$IKP_VERSION" IAM_VERSION="$IAM_VERSION" LMS_VERSION="$LMS_VERSION" \
-            docker compose -f "$SCRIPT_DIR/$COMPOSE_FILE" build; then
+            docker compose -f "$PROJECT_ROOT/$COMPOSE_FILE" build; then
             log_success "Build completed successfully"
             return 0
         fi
     else
         if SIIMUT_VERSION="$SIIMUT_VERSION" IKP_VERSION="$IKP_VERSION" IAM_VERSION="$IAM_VERSION" LMS_VERSION="$LMS_VERSION" \
-            docker compose -f "$SCRIPT_DIR/$COMPOSE_FILE" build "${SELECTED_SERVICES[@]}"; then
+            docker compose -f "$PROJECT_ROOT/$COMPOSE_FILE" build "${SELECTED_SERVICES[@]}"; then
             log_success "Build completed successfully"
             return 0
         fi
