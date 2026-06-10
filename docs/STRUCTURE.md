@@ -40,6 +40,7 @@ compose/
 ├── base/                            # Infrastructure services (modular, per-service)
 │   ├── infra.yml                    # Aggregator — include semua service
 │   ├── network.yml                  # Network rsch-apps_default (172.20.0.0/16)
+│   ├── web.yml                      # Nginx reverse proxy (multi-app)
 │   ├── database.yml                 # MySQL 8.0 (database-service)
 │   ├── minio.yml                    # MinIO S3 + minio-init (bucket creator)
 │   ├── phpmyadmin.yml               # phpMyAdmin (profile: dev)

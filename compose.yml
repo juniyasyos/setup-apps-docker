@@ -1,49 +1,9 @@
 name: service-app-multi
 
-services:
-  ####################################################################################################
-  # Nginx Web Server - Production Optimized (Multi-App Support)
-  ####################################################################################################
-  web:
-    image: nginx:alpine
-    container_name: ${STACK_NAME:-multi}-web
-    ports:
-      - "${SIIMUT_HOST_PORT:-8000}:8000"  # SIIMUT
-      - "${IKP_HOST_PORT:-8200}:8200"  # IKP
-      - "${IAM_HOST_PORT:-8100}:8100"  # IAM Server
-      - "${LMS_HOST_PORT:-7000}:7000"  # LMS Server
-    volumes:
-      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./docker/nginx/nginx-multi-apps.conf:/etc/nginx/conf.d/default.conf:ro
-      # SIIMUT
-      - siimut_public:/var/www/siimut/public:ro
-      - siimut_storage:/var/www/siimut/storage:ro
-      # IKP
-      - ikp_public:/var/www/ikp/public:ro
-      - ikp_storage:/var/www/ikp/storage:ro
-      # LMS
-      - lms_public:/var/www/lms-app/public:ro
-      - lms_storage:/var/www/lms-app/storage:ro
-      # # IAM
-      - iam_public:/var/www/iam/public:ro
-      - nginx_logs:/var/log/nginx
-    restart: unless-stopped
-    # Production resource limits
-    deploy:
-      resources:
-        limits:
-          memory: 384M
-          cpus: "0.5"
-        reservations:
-          memory: 128M
-          cpus: "0.1"
-    healthcheck:
-      test: ["CMD", "nginx", "-t"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+include:
+  - path: compose/base/web.yml
 
+services:
   ####################################################################################################
   ####################################################################################################
   # Section : Apps - Production Application
@@ -51,9 +11,8 @@ services:
   ####################################################################################################
 
   ####################################################################################################
-  # Apps SIIMUT
-  # Image built with: docker-compose -f compose/build.yml build && ./build.sh push
-  # Pulled from Docker Hub: juniyasyos/siimut:VERSION
+  # SIIMUT
+  # Image: juniyasyos/siimut:VERSION
   ####################################################################################################
   app-siimut:
     extends:
@@ -70,9 +29,9 @@ services:
       file: compose/apps/siimut.yml
       service: scheduler
 
-
   ####################################################################################################
-  # Apps IKP (New Application)
+  # IKP
+  # Image: juniyasyos/ikp:VERSION
   ####################################################################################################
   app-ikp:
     extends:
@@ -89,9 +48,9 @@ services:
       file: compose/apps/ikp.yml
       service: scheduler
 
-
   ####################################################################################################
-  # Apps IAM
+  # IAM Server
+  # Image: juniyasyos/iam-server:VERSION
   ####################################################################################################
   app-iam:
     extends:
@@ -108,9 +67,9 @@ services:
       file: compose/apps/iam.yml
       service: scheduler
 
-
   ####################################################################################################
-  # Apps LMS
+  # LMS
+  # Image: juniyasyos/lms-app:VERSION
   ####################################################################################################
   app-lms:
     extends:
@@ -127,57 +86,47 @@ services:
       file: compose/apps/lms.yml
       service: scheduler
 
-  ###################################################################################################
-  ###################################################################################################
-  # End Section: Apps - Production Application
-  ###################################################################################################
-  ###################################################################################################
-
 ####################################################################################################
-# Named Volumes - Multi-App Setup (Database and base infra from compose.base.yml)
+# Named Volumes
+# Volume naming convention:
+#   {app}_{type}  →  e.g. siimut_storage, ikp_public
+#   Types: storage, public, bootstrap_cache
 ####################################################################################################
 volumes:
-  # Web server data
-  nginx_logs:
-    driver: local
-
-  # ====== PUBLIC ASSETS (untuk Nginx serve static files) ======
+  # ── SIIMUT ───────────────────────────────────────
   siimut_public:
     driver: local
-  ikp_public:
-    driver: local
-  iam_public:
-    driver: local
-  lms_public:
-    driver: local
-
-  # ====== DATA PERSISTEN LARAVEL (tanpa vendor) ======
-  # SIIMUT
   siimut_storage:
     driver: local
   siimut_bootstrap_cache:
     driver: local
 
-  # IKP
+  # ── IKP ──────────────────────────────────────────
+  ikp_public:
+    driver: local
   ikp_storage:
     driver: local
   ikp_bootstrap_cache:
     driver: local
 
-  # # IAM
+  # ── IAM Server ───────────────────────────────────
+  iam_public:
+    driver: local
   iam_storage:
     driver: local
   iam_bootstrap_cache:
     driver: local
 
-  # # LMS
+  # ── LMS ──────────────────────────────────────────
+  lms_public:
+    driver: local
   lms_storage:
     driver: local
   lms_bootstrap_cache:
     driver: local
 
 ####################################################################################################
-# Networks - Using default from compose.base.yml
+# Networks - Using shared infrastructure network
 ####################################################################################################
 networks:
   default:
