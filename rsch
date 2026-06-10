@@ -49,7 +49,8 @@ COMMANDS:
     prepare <app>       Clone repo, setup .env, install dependencies
     prepare all         Prepare all apps
     scaffold <app>      Generate all files for a new app
-    list                List available applications
+    list                List available applications & their status
+    detail <app>        Show configuration and status details of an app
 
   Build & Deploy:
     build <app> [push]  Build Docker image (optionally push to registry)
@@ -78,12 +79,6 @@ EXAMPLES:
     ./rsch up --prod
     ./rsch logs siimut
     ./rsch infra up
-
-APPS:
-    siimut  — Sistem Informasi Imunisasi (port 8000)
-    ikp     — Incident Reporting & Pelaporan (port 8200)
-    iam     — Authentication & SSO Server (port 8100)
-    lms     — Learning Management System (port 7000)
 EOF
 }
 
@@ -216,6 +211,18 @@ cmd_list() {
 }
 
 # ──────────────────────────────────────────────
+# Detail
+# ──────────────────────────────────────────────
+cmd_detail() {
+    local app="${1:-}"
+    if [ -z "$app" ]; then
+        log_error "Usage: ./rsch detail <app>"
+        exit 1
+    fi
+    "${SCRIPT_DIR}/scripts/prepare.sh" detail "$app"
+}
+
+# ──────────────────────────────────────────────
 # Main Dispatch
 # ──────────────────────────────────────────────
 
@@ -238,6 +245,7 @@ case "$COMMAND" in
     health)     cmd_health "$@" ;;
     infra)      cmd_infra "$@" ;;
     list)       cmd_list ;;
+    detail)     cmd_detail "$@" ;;
     help|-h|--help) show_help ;;
     *)
         log_error "Unknown command: $COMMAND"

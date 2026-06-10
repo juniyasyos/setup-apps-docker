@@ -119,40 +119,272 @@ load_app_config() {
     return 1
 }
 
+get_app_status() {
+    local name="$1"
+    local dir="$2"
+
+    local c_cloned="No  "
+    local c_dockerfile="Miss"
+    local c_nginx="Miss"
+    local c_env="Miss"
+    local c_compose="Miss"
+    local c_db="Off  "
+
+    # Check command-v docker
+    local has_docker=false
+    if command -v docker &>/dev/null; then
+        has_docker=true
+    fi
+
+    # 1. Cloned
+    if [ -d "${PROJECT_DIR}/site/${dir}" ]; then
+        c_cloned="Yes "
+    fi
+
+    # 2. Dockerfile
+    if [ -f "${PROJECT_DIR}/apps/${name}/Dockerfile" ] || [ -f "${PROJECT_DIR}/docker/${name}/Dockerfile" ] || [ -f "${PROJECT_DIR}/site/${dir}/Dockerfile" ]; then
+        c_dockerfile="OK  "
+    fi
+
+    # 3. Nginx config
+    if [ -f "${PROJECT_DIR}/docker/nginx/conf.d/${name}.conf" ] || [ -f "${PROJECT_DIR}/docker/nginx/conf.d/${dir}.conf" ]; then
+        c_nginx="OK  "
+    fi
+
+    # 4. Env file
+    if [ -f "${PROJECT_DIR}/site/${dir}/.env" ]; then
+        c_env="OK  "
+    fi
+
+    # 5. Compose file
+    if [ -f "${PROJECT_DIR}/compose/apps/${name}.yml" ] || [ -f "${PROJECT_DIR}/compose/apps/${dir}.yml" ]; then
+        c_compose="OK  "
+    fi
+
+    # 6. DB Check
+    local db_name=""
+    if [ -f "${PROJECT_DIR}/apps/${name}/app.yml" ]; then
+        db_name=$(grep -E "^database:" "${PROJECT_DIR}/apps/${name}/app.yml" | awk '{print $2}' | tr -d '\r' || echo "")
+    fi
+    [ -z "$db_name" ] && db_name="${name}_db" # fallback
+
+    if [ "$has_docker" = true ]; then
+        if docker ps --filter "name=database-service" --filter "status=running" --format "{{.Names}}" | grep -q "database-service"; then
+            # database is running, check if database exists inside MySQL
+            if docker exec database-service mysql -uroot -prootpass123 -e "SHOW DATABASES LIKE '${db_name}';" --silent 2>/dev/null | grep -q "${db_name}"; then
+                c_db="Ready"
+            else
+                c_db="Miss "
+            fi
+        fi
+    fi
+
+    # Colorize to match visual length
+    local f_cloned=""
+    if [ "$c_cloned" = "Yes " ]; then
+        f_cloned="  ${GREEN}Yes${NC} "
+    else
+        f_cloned="  ${RED}No${NC}  "
+    fi
+
+    local f_dockerfile=""
+    if [ "$c_dockerfile" = "OK  " ]; then
+        f_dockerfile="    ${GREEN}OK${NC}    "
+    else
+        f_dockerfile="   ${RED}Miss${NC}   "
+    fi
+
+    local f_nginx=""
+    if [ "$c_nginx" = "OK  " ]; then
+        f_nginx="  ${GREEN}OK${NC}  "
+    else
+        f_nginx=" ${RED}Miss${NC} "
+    fi
+
+    local f_env=""
+    if [ "$c_env" = "OK  " ]; then
+        f_env="  ${GREEN}OK${NC}  "
+    else
+        f_env=" ${RED}Miss${NC} "
+    fi
+
+    local f_compose=""
+    if [ "$c_compose" = "OK  " ]; then
+        f_compose="  ${GREEN}OK${NC}   "
+    else
+        f_compose="  ${RED}Miss${NC} "
+    fi
+
+    local f_db=""
+    if [ "$c_db" = "Ready" ]; then
+        f_db="   ${GREEN}Ready${NC}    "
+    elif [ "$c_db" = "Miss " ]; then
+        f_db="    ${RED}Miss${NC}    "
+    else
+        f_db="  ${YELLOW}Offline${NC}   "
+    fi
+
+    echo "$f_cloned|$f_dockerfile|$f_nginx|$f_env|$f_compose|$f_db"
+}
+
+show_app_detail() {
+    local target="$1"
+    if ! load_app_config "$target"; then
+        log_error "App '${target}' tidak dikenal!"
+        exit 1
+    fi
+
+    local database=""
+    local db_user=""
+    local db_password=""
+    local port=""
+    local domain=""
+    local php_version=""
+    local queue=""
+    local scheduler=""
+    local version=""
+    
+    local yml_file="${PROJECT_DIR}/apps/${target}/app.yml"
+    if [ -f "$yml_file" ]; then
+        database=$(grep -E "^database:" "$yml_file" | awk '{print $2}' | tr -d '\r' || echo "")
+        db_user=$(grep -E "^db_user:" "$yml_file" | awk '{print $2}' | tr -d '\r' || echo "")
+        db_password=$(grep -E "^db_password:" "$yml_file" | awk '{print $2}' | tr -d '\r' || echo "")
+        port=$(grep -E "^port:" "$yml_file" | awk '{print $2}' | tr -d '\r' || echo "")
+        domain=$(grep -E "^domain:" "$yml_file" | awk '{print $2}' | tr -d '\r' || echo "")
+        php_version=$(grep -E "^php_version:" "$yml_file" | awk '{print $2}' | tr -d '\r' || echo "")
+        queue=$(grep -E "^queue:" "$yml_file" | awk '{print $2}' | tr -d '\r' || echo "")
+        scheduler=$(grep -E "^scheduler:" "$yml_file" | awk '{print $2}' | tr -d '\r' || echo "")
+        version=$(grep -E "^version:" "$yml_file" | awk '{print $2}' | tr -d '\r' || echo "")
+    fi
+
+    # Fallback/defaults
+    [ -z "$database" ] && database="${target}_db"
+    [ -z "$db_user" ] && db_user="${target}_user"
+    [ -z "$port" ] && port="N/A"
+    [ -z "$domain" ] && domain="${target}.local"
+    [ -z "$php_version" ] && php_version="N/A"
+    [ -z "$queue" ] && queue="false"
+    [ -z "$scheduler" ] && scheduler="false"
+    [ -z "$version" ] && version="latest"
+
+    # Status check of files
+    local df_status="Missing"
+    local df_path="apps/${target}/Dockerfile"
+    if [ -f "${PROJECT_DIR}/apps/${target}/Dockerfile" ]; then
+        df_status="Ready"
+    elif [ -f "${PROJECT_DIR}/docker/${target}/Dockerfile" ]; then
+        df_status="Ready"
+        df_path="docker/${target}/Dockerfile"
+    elif [ -f "${PROJECT_DIR}/site/${APP_DIR}/Dockerfile" ]; then
+        df_status="Ready"
+        df_path="site/${APP_DIR}/Dockerfile"
+    fi
+
+    local nginx_status="Missing"
+    local nginx_path="docker/nginx/conf.d/${target}.conf"
+    if [ -f "${PROJECT_DIR}/docker/nginx/conf.d/${target}.conf" ]; then
+        nginx_status="Ready"
+    elif [ -f "${PROJECT_DIR}/docker/nginx/conf.d/${APP_DIR}.conf" ]; then
+        nginx_status="Ready"
+        nginx_path="docker/nginx/conf.d/${APP_DIR}.conf"
+    fi
+
+    local env_status="Missing"
+    local env_path="site/${APP_DIR}/.env"
+    if [ -f "${PROJECT_DIR}/${env_path}" ]; then
+        env_status="Ready"
+    fi
+
+    local compose_status="Missing"
+    local compose_path="compose/apps/${target}.yml"
+    if [ -f "${PROJECT_DIR}/${compose_path}" ]; then
+        compose_status="Ready"
+    elif [ -f "${PROJECT_DIR}/compose/apps/${APP_DIR}.yml" ]; then
+        compose_status="Ready"
+        compose_path="compose/apps/${APP_DIR}.yml"
+    fi
+
+    local db_status="Offline"
+    if command -v docker &>/dev/null; then
+        if docker ps --filter "name=database-service" --filter "status=running" --format "{{.Names}}" | grep -q "database-service"; then
+            if docker exec database-service mysql -uroot -prootpass123 -e "SHOW DATABASES LIKE '${database}';" --silent 2>/dev/null | grep -q "${database}"; then
+                db_status="Ready"
+            else
+                db_status="Missing"
+            fi
+        fi
+    fi
+
+    echo -e "\n${CYAN}══════════════════════════════════════════════════════════════════════════════${NC}"
+    echo -e "  ${BLUE}📄 DETAIL APLIKASI: ${NC}${YELLOW}${APP_NAME}${NC}"
+    echo -e "${CYAN}══════════════════════════════════════════════════════════════════════════════${NC}"
+    echo -e "  ${CYAN}Nama App${NC}     : ${APP_NAME} (${target})"
+    echo -e "  ${CYAN}Deskripsi${NC}    : ${APP_DESC}"
+    echo -e "  ${CYAN}Git Repo${NC}     : ${REPO_URL}"
+    echo -e "  ${CYAN}Cabang / Branch${NC}: ${BRANCH}"
+    echo -e "  ${CYAN}Versi App${NC}    : ${version}"
+    echo -e "  ${CYAN}PHP Version${NC}  : ${php_version}"
+    echo -e "  ${CYAN}Local Deps${NC}   : $([ "${HAS_LOCAL_DEPS}" = "yes" ] && echo -e "${GREEN}✓ Ya${NC}" || echo -e "${RED}✗ Tidak${NC}")"
+    echo -e "  ${CYAN}Queue Worker${NC} : $([ "${queue}" = "true" ] && echo -e "${GREEN}✓ Enabled${NC}" || echo -e "${RED}✗ Disabled${NC}")"
+    echo -e "  ${CYAN}Scheduler${NC}    : $([ "${scheduler}" = "true" ] && echo -e "${GREEN}✓ Enabled${NC}" || echo -e "${RED}✗ Disabled${NC}")"
+    echo ""
+    echo -e "  ${BLUE}🌐 Network & Port:${NC}"
+    echo -e "    • Local Domain : http://${domain}:${port}"
+    echo -e "    • Internal Port: ${port}"
+    echo ""
+    echo -e "  ${BLUE}📁 Path & Konfigurasi:${NC}"
+    echo -e "    • Source Code  : site/${APP_DIR}  $([ -d "${PROJECT_DIR}/site/${APP_DIR}" ] && echo -e "(${GREEN}Cloned${NC})" || echo -e "(${RED}Not Cloned${NC})")"
+    echo -e "    • Dockerfile   : ${df_path}  $([ "${df_status}" = "Ready" ] && echo -e "(${GREEN}✓ Ada${NC})" || echo -e "(${RED}✗ Belum ada${NC})")"
+    echo -e "    • Nginx Config : ${nginx_path}  $([ "${nginx_status}" = "Ready" ] && echo -e "(${GREEN}✓ Ada${NC})" || echo -e "(${RED}✗ Belum ada${NC})")"
+    echo -e "    • Compose File : ${compose_path}  $([ "${compose_status}" = "Ready" ] && echo -e "(${GREEN}✓ Ada${NC})" || echo -e "(${RED}✗ Belum ada${NC})")"
+    echo -e "    • Environment  : ${env_path}  $([ "${env_status}" = "Ready" ] && echo -e "(${GREEN}✓ Configured${NC})" || echo -e "(${RED}✗ Not Configured${NC})")"
+    echo ""
+    echo -e "  ${BLUE}🗄️  Database Info:${NC}"
+    echo -e "    • DB Name      : ${database}"
+    echo -e "    • DB User      : ${db_user}"
+    echo -e "    • DB Status    : $([ "${db_status}" = "Ready" ] && echo -e "${GREEN}✓ Ready${NC}" || { [ "${db_status}" = "Missing" ] && echo -e "${RED}✗ Database Belum Ada${NC}"; } || echo -e "${YELLOW}🔌 Database Service Offline${NC}")"
+    echo ""
+    echo -e "  ${BLUE}⚙️  Perintah CLI Detail untuk ${target}:${NC}"
+    echo -e "    • Prepare app  : ${YELLOW}./rsch prepare ${target}${NC}"
+    echo -e "    • Build image  : ${YELLOW}./rsch build ${target}${NC}"
+    echo -e "    • Restart app  : ${YELLOW}./rsch restart ${target}${NC}"
+    echo -e "    • Tail logs    : ${YELLOW}./rsch logs ${target}${NC}"
+    echo -e "    • Health check : ${YELLOW}./rsch health ${target}${NC}"
+    echo -e "${CYAN}══════════════════════════════════════════════════════════════════════════════${NC}\n"
+}
+
 list_apps() {
     load_all_apps
 
     echo ""
-    echo "╔══════════════════════════════════════════════════════════════════════════════╗"
-    echo "║                         📦  Available Applications                          ║"
-    echo "╠════════╤════════════╤════════════════════════════════════════════════════════╣"
-    printf "║ %-6s │ %-10s │  %-56s ║\n" "App" "Folder" "Description"
-    echo "║────────┼────────────┼────────────────────────────────────────────────────────║"
+    echo "╔═══════════════════════════════════════════════════════════════════════════════════════╗"
+    echo "║                              📦  Application Setup Status                             ║"
+    echo "╠════════╤════════════╤════════╤════════════╤════════╤════════╤═════════╤═══════════════╣"
+    echo "║ App    │ Folder     │ Cloned │ Dockerfile │ Nginx  │ Env    │ Compose │ DB Status     ║"
+    echo "║────────┼────────────┼────────┼────────────┼────────┼────────┼─────────┼───────────────║"
+
     for i in "${!APP_NAMES[@]}"; do
-        printf "║ %-6s │ %-10s │  %-56s ║\n" "${APP_NAMES[$i]}" "${APP_DIRS[$i]}" "${APP_DESCS[$i]}"
+        local name="${APP_NAMES[$i]}"
+        local folder="${APP_DIRS[$i]}"
+        
+        # Get checks
+        local checks
+        checks=$(get_app_status "$name" "$folder")
+        
+        IFS='|' read -r f_cloned f_dockerfile f_nginx f_env f_compose f_db <<< "$checks"
+        
+        printf "║ %-6s │ %-10s │ %b │ %b │ %b │ %b │ %b │ %b ║\n" \
+            "$name" "$folder" "$f_cloned" "$f_dockerfile" "$f_nginx" "$f_env" "$f_compose" "$f_db"
     done
-    echo "╚════════╧════════════╧════════════════════════════════════════════════════════╝"
-    echo ""
-    echo "── Repository Detail ──────────────────────────────────────────────"
-    for i in "${!APP_NAMES[@]}"; do
-        local prod_label="–"
-        local deps_label="–"
-        [ "${APP_HAS_PROD[$i]}" = "yes" ] && prod_label="✓ ya" || prod_label="✗ tidak"
-        [ "${APP_HAS_DEPS[$i]}" = "yes" ] && deps_label="✓ ya" || deps_label="✗ tidak"
-        echo ""
-        echo "  App        : ${APP_NAMES[$i]}"
-        echo "  Description: ${APP_DESCS[$i]}"
-        echo "  Git Repo   : ${APP_REPOS[$i]}"
-        echo "  Branch     : ${APP_BRANCHES[$i]}"
-        echo "  Prod Env   : ${prod_label}"
-        echo "  Local Deps : ${deps_label}"
-        echo "  Output Dir : site/${APP_DIRS[$i]}"
-    done
+
+    echo "╚════════╧════════════╧════════╧════════════╧════════╧════════╧═════════╧═══════════════╝"
     echo ""
     echo "── Cara Pakai ─────────────────────────────────────────────────────"
-    echo "  ./prepare.sh                    — tampilkan daftar ini"
-    echo "  ./prepare.sh siimut             — prepare app siimut"
-    echo "  ./prepare.sh siimut ikp         — prepare beberapa app sekaligus"
+    echo "  ./prepare.sh                    — tampilkan status/daftar ini"
+    echo "  ./prepare.sh list               — tampilkan status/daftar ini"
+    echo "  ./prepare.sh detail <app>       — tampilkan detail konfigurasi & perintah app"
+    echo "  ./prepare.sh <app>              — prepare app"
+    echo "  ./prepare.sh <app1> <app2>      — prepare beberapa app sekaligus"
     echo "  ./prepare.sh mynewapp           — scaffolding + prepare app baru"
     echo "  ./prepare.sh siimut --no-deps   — skip install dependencies"
     echo ""
@@ -296,6 +528,16 @@ main() {
     # No args or "list" → show available apps
     if [ $# -eq 0 ] || [ "$1" = "list" ] || [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
         list_apps
+        exit 0
+    fi
+
+    # "detail" → show specific app detail
+    if [ "$1" = "detail" ]; then
+        if [ -z "${2:-}" ]; then
+            log_error "Usage: ./prepare.sh detail <app>"
+            exit 1
+        fi
+        show_app_detail "$2"
         exit 0
     fi
 
