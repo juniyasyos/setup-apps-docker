@@ -141,8 +141,10 @@ get_app_status() {
         c_cloned="Yes "
     fi
 
-    # 2. Dockerfile
-    if [ -f "${PROJECT_DIR}/apps/${name}/Dockerfile" ] || [ -f "${PROJECT_DIR}/docker/${name}/Dockerfile" ] || [ -f "${PROJECT_DIR}/site/${dir}/Dockerfile" ]; then
+    # 2. Dockerfile — priority: apps/${name}/ > docker/${name}/ > site/${dir}/
+    if [ -f "${PROJECT_DIR}/apps/${name}/Dockerfile" ]; then
+        c_dockerfile="OK  "
+    elif [ -f "${PROJECT_DIR}/docker/${name}/Dockerfile" ] || [ -f "${PROJECT_DIR}/site/${dir}/Dockerfile" ]; then
         c_dockerfile="OK  "
     fi
 

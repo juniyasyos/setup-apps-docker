@@ -41,14 +41,14 @@ select_framework() {
 # Generate Dockerfile untuk Laravel
 # ──────────────────────────────────────────────
 generate_laravel_dockerfile() {
-    local dest_dir="${PROJECT_DIR}/docker/${APP_NAME}"
+    local dest_dir="${PROJECT_DIR}/apps/${APP_NAME}"
     local dest_file="${dest_dir}/Dockerfile"
     local entrypoint_file="${dest_dir}/entrypoint.sh"
 
     # Handle existing file
     if [ -f "${dest_file}" ]; then
         echo ""
-        echo -e "  ${YELLOW}⚠️  Dockerfile sudah ada: docker/${APP_NAME}/Dockerfile${NC}"
+        echo -e "  ${YELLOW}⚠️  Dockerfile sudah ada: apps/${APP_NAME}/Dockerfile${NC}"
         echo ""
         echo "  Apa yang ingin dilakukan?"
         echo "  S) Skip — biarkan file yang ada"
@@ -67,7 +67,7 @@ generate_laravel_dockerfile() {
     fi
 
     mkdir -p "${dest_dir}"
-    log_info "Generating Dockerfile untuk ${APP_NAME} (Laravel) → docker/${APP_NAME}/Dockerfile"
+    log_info "Generating Dockerfile untuk ${APP_NAME} (Laravel) → apps/${APP_NAME}/Dockerfile"
 
     # ── Tulis Dockerfile ──────────────────────────────────────────────────────
     cat > "${dest_file}" << DOCKERFILE
@@ -223,7 +223,7 @@ RUN set -eux; \\
       chmod -R 755 public || true; \\
     fi
 
-COPY docker/${APP_NAME}/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY apps/${APP_NAME}/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 EXPOSE 9000
@@ -235,11 +235,11 @@ ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["php-fpm", "-F"]
 DOCKERFILE
 
-    log_success "Dockerfile berhasil dibuat: docker/${APP_NAME}/Dockerfile"
+    log_success "Dockerfile berhasil dibuat: apps/${APP_NAME}/Dockerfile"
 
     # ── Tulis entrypoint.sh jika belum ada ────────────────────────────────────
     if [ ! -f "${entrypoint_file}" ]; then
-        log_info "Generating entrypoint.sh → docker/${APP_NAME}/entrypoint.sh"
+        log_info "Generating entrypoint.sh → apps/${APP_NAME}/entrypoint.sh"
         cat > "${entrypoint_file}" << 'ENTRYPOINT'
 #!/bin/sh
 set -e
@@ -302,7 +302,7 @@ echo "🚀 Starting: $*"
 exec "$@"
 ENTRYPOINT
         chmod +x "${entrypoint_file}"
-        log_success "entrypoint.sh berhasil dibuat: docker/${APP_NAME}/entrypoint.sh"
+        log_success "entrypoint.sh berhasil dibuat: apps/${APP_NAME}/entrypoint.sh"
     else
         echo -e "  ${BLUE}ℹ️  entrypoint.sh sudah ada, dibiarkan.${NC}"
     fi
