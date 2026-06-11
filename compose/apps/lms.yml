@@ -6,7 +6,7 @@ services:
     extends:
       file: ../base/php-base.yml
       service: php-app-base
-    image: juniyasyos/lms:v1.0.0
+    image: lms:v1.0.0
     container_name: lms-app
     working_dir: /var/www/lms-app
     env_file:
@@ -45,7 +45,7 @@ services:
     extends:
       file: ../base/php-base.yml
       service: php-worker-base
-    image: juniyasyos/lms:v1.0.0
+    image: lms:v1.0.0
     container_name: lms-queue
     working_dir: /var/www/lms-app
     env_file:
@@ -77,7 +77,7 @@ services:
     extends:
       file: ../base/php-base.yml
       service: php-scheduler-base
-    image: juniyasyos/lms:v1.0.0
+    image: lms:v1.0.0
     container_name: lms-scheduler
     working_dir: /var/www/lms-app
     env_file:
