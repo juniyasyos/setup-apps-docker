@@ -1,28 +1,32 @@
 #!/usr/bin/env bash
 # =============================================================================
-# rsch scaffold — Library for generating new application files
-# =============================================================================
-# This script both serves as a standalone CLI and a library sourced by
-# prepare.sh when scaffolding a new app interactively.
+# rsch scaffold v2
+# Generate Docker config for a new app using templates.
 #
-# Usage (standalone):
-#   ./scripts/scaffold.sh <name>          # prompt for everything
-#   ./scripts/scaffold.sh <name> --auto   # read apps/<name>/app.yml silently
-#   ./scripts/scaffold.sh list            # list what can be scaffolded
+# Usage:
+#   ./scripts/scaffold.sh new rbv
+#   ./scripts/scaffold.sh new rbv --auto
+#   ./scripts/scaffold.sh render rbv
+#   ./scripts/scaffold.sh list
 #
-# Sourced by prepare.sh (library mode):
-#   source scripts/scaffold.sh
-#   scaffold_interactive <name>
+# Main idea:
+#   - Bash only orchestrates.
+#   - YAML/Nginx/SQL/env content lives in templates/scaffold/*.tpl.
+#   - App metadata lives in apps/<name>/app.yml.
 # =============================================================================
 
 set -euo pipefail
 
+# -----------------------------------------------------------------------------
+# Path
+# -----------------------------------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+TEMPLATE_DIR="${PROJECT_DIR}/scripts/templates/scaffold"
 
-# ============================================
-# Colors (redefine if not inherited)
-# ============================================
+# -----------------------------------------------------------------------------
+# Color & log
+# -----------------------------------------------------------------------------
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -33,899 +37,907 @@ NC='\033[0m'
 log_info()    { echo -e "${BLUE}ℹ️  $1${NC}"; }
 log_success() { echo -e "${GREEN}✅ $1${NC}"; }
 log_warn()    { echo -e "${YELLOW}⚠️  $1${NC}"; }
-log_error()   { echo -e "${RED}❌ $1${NC}"; }
-log_header()  { echo -e "\n${CYAN}════════════════════════════════════════════${NC}"; echo -e "${CYAN}   $1${NC}"; echo -e "${CYAN}════════════════════════════════════════════${NC}"; }
+log_error()   { echo -e "${RED}❌ $1${NC}" >&2; }
+log_header()  {
+  echo -e "\n${CYAN}════════════════════════════════════════════${NC}"
+  echo -e "${CYAN}   $1${NC}"
+  echo -e "${CYAN}════════════════════════════════════════════${NC}"
+}
 
-# ============================================
-# Utility — Python YAML insert helpers
-# ============================================
+die() {
+  log_error "$1"
+  exit 1
+}
 
-# ============================================
-# Python YAML manipulation scripts directory
-# ============================================
-PY_LIB="${SCRIPT_DIR}/.scaffold_py"
-mkdir -p "$PY_LIB"
+# -----------------------------------------------------------------------------
+# Basic helpers
+# -----------------------------------------------------------------------------
+usage() {
+  cat <<'EOF'
+Usage:
+  ./scripts/scaffold.sh new <app>          Create apps/<app>/app.yml interactively, then render files
+  ./scripts/scaffold.sh new <app> --auto   Render from existing apps/<app>/app.yml
+  ./scripts/scaffold.sh render <app>       Render from existing apps/<app>/app.yml
+  ./scripts/scaffold.sh list               Show available scaffold templates
+  ./scripts/scaffold.sh check              Check required files/templates
 
-# Write a Python helper script for YAML manipulation
-write_py_lib() {
-    [ -f "${PY_LIB}/insert_compose.py" ] && return 0
+Examples:
+  ./scripts/scaffold.sh new rbv
+  ./scripts/scaffold.sh new rbv --auto
+  ./scripts/scaffold.sh render rbv
+EOF
+}
 
-    cat > "${PY_LIB}/insert_compose.py" << 'PYEOF'
-import sys, os
+require_cmd() {
+  command -v "$1" >/dev/null 2>&1 || die "Command not found: $1"
+}
 
-filepath = os.environ['COMPOSE_YML']
-name = os.environ['APP_NAME']
-source_dir = os.environ['SOURCE_DIR']
-desc = os.environ['APP_DESC']
-has_queue = os.environ.get('HAS_QUEUE', 'true') == 'true'
-has_scheduler = os.environ.get('HAS_SCHEDULER', 'true') == 'true'
+to_upper() {
+  echo "$1" | tr '[:lower:]' '[:upper:]' | tr '-' '_'
+}
 
-with open(filepath, 'r') as f:
+to_lower() {
+  echo "$1" | tr '[:upper:]' '[:lower:]'
+}
+
+trim() {
+  sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+}
+
+ensure_dir() {
+  mkdir -p "$1"
+}
+
+file_exists() {
+  [ -f "$1" ]
+}
+
+# -----------------------------------------------------------------------------
+# Simple YAML reader
+# Supports simple "key: value" only.
+# Good enough for apps/<name>/app.yml.
+# -----------------------------------------------------------------------------
+yaml_get() {
+  local file="$1"
+  local key="$2"
+
+  grep -E "^${key}:" "$file" 2>/dev/null \
+    | head -n1 \
+    | sed 's/^[^:]*:[[:space:]]*//' \
+    | sed 's/^"//;s/"$//' \
+    | sed "s/^'//;s/'$//" \
+    | trim
+}
+
+yaml_bool() {
+  local value
+  value="$(to_lower "${1:-false}")"
+
+  case "$value" in
+    true|yes|y|1) echo "true" ;;
+    *) echo "false" ;;
+  esac
+}
+
+# -----------------------------------------------------------------------------
+# Template rendering
+# Replaces {{VAR}} placeholders using exported environment variables.
+# No external envsubst dependency needed.
+# -----------------------------------------------------------------------------
+render_template() {
+  local template="$1"
+  local output="$2"
+
+  [ -f "$template" ] || die "Template not found: $template"
+
+  ensure_dir "$(dirname "$output")"
+
+  python3 - "$template" "$output" <<'PY'
+import os
+import re
+import sys
+
+template_path = sys.argv[1]
+output_path = sys.argv[2]
+
+with open(template_path, "r", encoding="utf-8") as f:
     content = f.read()
 
-volumes_header = "# Named Volumes"
-volumes_idx = content.find(volumes_header)
-if volumes_idx == -1:
-    print("ERROR: Cannot find Named Volumes section", file=sys.stderr)
-    sys.exit(1)
+pattern = re.compile(r"\{\{([A-Z0-9_]+)\}\}")
 
-svc_block = f"""
-  # {desc}
-  # Image: juniyasyos/{name}:VERSION
-  app-{name}:
-    extends:
-      file: compose/apps/{name}.yml
-      service: app
-"""
+def replace(match):
+    key = match.group(1)
+    return os.environ.get(key, "")
 
-if has_queue:
-    svc_block += f"""
-  queue-{name}:
-    extends:
-      file: compose/apps/{name}.yml
-      service: queue
-"""
+content = pattern.sub(replace, content)
 
-if has_scheduler:
-    svc_block += f"""
-  scheduler-{name}:
-    extends:
-      file: compose/apps/{name}.yml
-      service: scheduler
-"""
-
-insert_pos = content.rfind('\n', 0, volumes_idx - 1)
-content = content[:insert_pos] + svc_block + content[insert_pos:]
-
-vol_block = f"""
-  # ── {name.upper()} ──────────────────────────────────────────
-  {name}_public:
-    driver: local
-  {name}_storage:
-    driver: local
-  {name}_bootstrap_cache:
-    driver: local
-"""
-
-networks_idx = content.find('\nnetworks:')
-volumes_section_end = content.rfind('\n\n', 0, networks_idx)
-content = content[:volumes_section_end] + vol_block + content[volumes_section_end:]
-
-with open(filepath, 'w') as f:
+with open(output_path, "w", encoding="utf-8") as f:
     f.write(content)
-print("OK")
-PYEOF
+PY
+}
 
-    cat > "${PY_LIB}/insert_web.py" << 'PYEOF'
-import sys, os
+render_template_to_stdout() {
+  local template="$1"
 
-filepath = os.environ['WEB_YML']
-name = os.environ['APP_NAME']
-source_dir = os.environ['SOURCE_DIR']
-port = os.environ['APP_PORT']
-name_upper = name.upper()
-host_port_var = f"{name_upper}_HOST_PORT"
+  [ -f "$template" ] || die "Template not found: $template"
 
-with open(filepath, 'r') as f:
+  python3 - "$template" <<'PY'
+import os
+import re
+import sys
+
+template_path = sys.argv[1]
+
+with open(template_path, "r", encoding="utf-8") as f:
     content = f.read()
 
-# Insert port entry into x-web-ports
-ports_marker = "x-web-ports:"
-ports_start = content.find(ports_marker)
-if ports_start == -1:
-    print("ERROR: Cannot find x-web-ports in web.yml", file=sys.stderr)
-    sys.exit(1)
+pattern = re.compile(r"\{\{([A-Z0-9_]+)\}\}")
 
-ports_end = content.find("\n\nx-", ports_start + 1)
-if ports_end == -1:
-    ports_end = content.find("\nservices:", ports_start + 1)
+def replace(match):
+    key = match.group(1)
+    return os.environ.get(key, "")
 
-last_port_line = content.rfind('\n  - "', ports_start, ports_end)
-if last_port_line == -1:
-    last_port_line = ports_end
-
-new_port = f'  - "${{{host_port_var}:{port}}}:{port}"\n'
-content = content[:last_port_line] + '\n' + new_port + content[last_port_line + 1:]
-
-# Insert volume entries into x-web-volumes
-volumes_marker = "x-web-volumes:"
-volumes_start = content.find(volumes_marker)
-if volumes_start == -1:
-    print("ERROR: Cannot find x-web-volumes", file=sys.stderr)
-    sys.exit(1)
-
-volumes_end = content.find("\n\nservices:", volumes_start + 1)
-
-last_vol_line = content.rfind('\n  - ', volumes_start, volumes_end)
-if last_vol_line == -1:
-    last_vol_line = volumes_end
-
-new_vols = f"  - {name}_public:/var/www/{source_dir}/public:ro\n  - {name}_storage:/var/www/{source_dir}/storage:ro\n"
-content = content[:last_vol_line] + '\n' + new_vols + content[last_vol_line + 1:]
-
-with open(filepath, 'w') as f:
-    f.write(content)
-print("OK")
-PYEOF
-
-    cat > "${PY_LIB}/insert_build.py" << 'PYEOF'
-import sys, os
-
-filepath = os.environ['BUILD_YML']
-name = os.environ['APP_NAME']
-source_dir = os.environ['SOURCE_DIR']
-db_user = os.environ['DB_USER']
-db_pass = os.environ['DB_PASSWORD']
-database = os.environ['DB_NAME']
-desc = os.environ['APP_DESC']
-
-with open(filepath, 'r') as f:
-    content = f.read()
-
-content = content.rstrip()
-
-build_block = f"""
-
-  ####################################################################################################
-  # {desc}
-  ####################################################################################################
-  {name}:
-    build:
-      context: .
-      dockerfile: apps/{name}/Dockerfile
-      args:
-        UID: "1000"
-        GID: "1000"
-        TZ: "Asia/Jakarta"
-        APP_NAME: "{desc}"
-        APP_ENV: "production"
-        APP_DIR: "{source_dir}"
-        DB_HOST: "database-service"
-        DB_USERNAME: "{db_user}"
-        DB_PASSWORD: "{db_pass}"
-        DB_DATABASE: "{database}"
-        AWS_ACCESS_KEY_ID: "admin"
-        AWS_SECRET_ACCESS_KEY: "password"
-        AWS_BUCKET: "{name}"
-        AWS_URL: "http://minio:9090/{name}"
-        AWS_ENDPOINT: "http://minio:9090"
-        BUILD_TIMESTAMP: "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-    image: {name}:${{{name}_VERSION:-latest}}
-    pull_policy: never
-"""
-
-content += build_block + '\n'
-
-with open(filepath, 'w') as f:
-    f.write(content)
-print("OK")
-PYEOF
+print(pattern.sub(replace, content), end="")
+PY
 }
 
-# Insert a service block + volume block into compose.yml
-py_insert_compose_yml() {
-    local name="$1" source_dir="$2" has_queue="$3" has_scheduler="$4" desc="$5"
+# -----------------------------------------------------------------------------
+# Safe append helpers
+# -----------------------------------------------------------------------------
+append_once() {
+  local target="$1"
+  local marker="$2"
+  local content="$3"
 
-    write_py_lib
-    APP_NAME="$name" SOURCE_DIR="$source_dir" HAS_QUEUE="$has_queue" \
-        HAS_SCHEDULER="$has_scheduler" APP_DESC="$desc" \
-        COMPOSE_YML="${PROJECT_DIR}/compose.yml" \
-        python3 "${PY_LIB}/insert_compose.py"
-}
+  ensure_dir "$(dirname "$target")"
+  touch "$target"
 
-# Insert port + volume into compose/base/web.yml
-py_insert_web_yml() {
-    local name="$1" source_dir="$2" port="$3"
+  if grep -qF "$marker" "$target"; then
+    log_warn "  Skip, already exists in ${target}: ${marker}"
+    return 0
+  fi
 
-    write_py_lib
-    APP_NAME="$name" SOURCE_DIR="$source_dir" APP_PORT="$port" \
-        WEB_YML="${PROJECT_DIR}/compose/base/web.yml" \
-        python3 "${PY_LIB}/insert_web.py"
-}
-
-# Insert build service into compose/build.yml
-py_insert_build_yml() {
-    local name="$1" source_dir="$2" db_user="$3" db_pass="$4" database="$5" desc="$6"
-
-    write_py_lib
-    APP_NAME="$name" SOURCE_DIR="$source_dir" DB_USER="$db_user" \
-        DB_PASSWORD="$db_pass" DB_NAME="$database" APP_DESC="$desc" \
-        BUILD_YML="${PROJECT_DIR}/compose/build.yml" \
-        python3 "${PY_LIB}/insert_build.py"
-}
-
-# ============================================
-# Interactive prompt
-# ============================================
-scaffold_interactive() {
-    local app_name="$1"
-
-    log_header "🏗️  App Baru: ${app_name}"
-
-    # ── Detect existing apps for defaults ──
-    # Find highest port from repos.csv and web.yml
-    local highest_port=8300
-    if [ -f "${PROJECT_DIR}/compose/base/web.yml" ]; then
-        # Extract all ports from x-web-ports
-        local found_ports
-        found_ports=$(grep -oP '\${\w+_HOST_PORT:-\K[0-9]+' "${PROJECT_DIR}/compose/base/web.yml}" 2>/dev/null || echo "")
-        for p in $found_ports; do
-            [ "$p" -gt "$highest_port" ] && highest_port="$p"
-        done
-    fi
-    # Also check repos.csv port column (implied by name pattern)
-    if [ -f "${PROJECT_DIR}/repos.csv" ]; then
-        # Some ports might be defined only in env files
-        for ef in "${PROJECT_DIR}/env/prod.env" "${PROJECT_DIR}/env/dev.env" "${PROJECT_DIR}/env/local.env"; do
-            if [ -f "$ef" ]; then
-                local env_ports
-                env_ports=$(grep -oP 'HOST_PORT=\K[0-9]+' "$ef" 2>/dev/null || echo "")
-                for p in $env_ports; do
-                    [ "$p" -gt "$highest_port" ] && highest_port="$p"
-                done
-            fi
-        done
-    fi
-    local default_port=$((highest_port + 10))
-
+  {
     echo ""
-    echo "╔═══════════════════════════════════════════════════════════════╗"
-    echo "║  Isi detail aplikasi baru                                    ║"
-    echo "║  (tekan Enter untuk pakai nilai default di dalam kurung)     ║"
-    echo "╚═══════════════════════════════════════════════════════════════╝"
+    echo "$content"
+  } >> "$target"
+}
+
+insert_before_marker_once() {
+  local target="$1"
+  local marker="$2"
+  local exists_marker="$3"
+  local content="$4"
+
+  [ -f "$target" ] || die "Target not found: $target"
+
+  if grep -qF "$exists_marker" "$target"; then
+    log_warn "  Skip, already exists in ${target}: ${exists_marker}"
+    return 0
+  fi
+
+  if ! grep -qF "$marker" "$target"; then
+    die "Marker not found in ${target}: ${marker}"
+  fi
+
+  local tmp
+  tmp="$(mktemp)"
+
+  awk -v marker="$marker" -v block="$content" '
+    index($0, marker) && inserted == 0 {
+      print block
+      inserted = 1
+    }
+    { print }
+  ' "$target" > "$tmp"
+
+  mv "$tmp" "$target"
+}
+
+insert_after_marker_once() {
+  local target="$1"
+  local marker="$2"
+  local exists_marker="$3"
+  local content="$4"
+
+  [ -f "$target" ] || die "Target not found: $target"
+
+  if grep -qF "$exists_marker" "$target"; then
+    log_warn "  Skip, already exists in ${target}: ${exists_marker}"
+    return 0
+  fi
+
+  if ! grep -qF "$marker" "$target"; then
+    die "Marker not found in ${target}: ${marker}"
+  fi
+
+  local tmp
+  tmp="$(mktemp)"
+
+  awk -v marker="$marker" -v block="$content" '
+    {
+      print
+      if (index($0, marker) && inserted == 0) {
+        print block
+        inserted = 1
+      }
+    }
+  ' "$target" > "$tmp"
+
+  mv "$tmp" "$target"
+}
+
+append_env_once() {
+  local target="$1"
+  local key="$2"
+  local value="$3"
+  local label="$4"
+
+  ensure_dir "$(dirname "$target")"
+  touch "$target"
+
+  if grep -qE "^${key}=" "$target"; then
+    log_warn "  ${key} already exists in $(basename "$target"), skipping"
+    return 0
+  fi
+
+  {
     echo ""
-
-    # ── Prompt all fields with defaults ──
-    read -r -p "  Nama app       [${app_name}]: " input_name
-    NAME="${input_name:-$app_name}"
-
-    read -r -p "  Deskripsi      [${NAME} - New Application]: " input_desc
-    DESC="${input_desc:-${NAME} - New Application}"
-
-    read -r -p "  Git repo URL   [https://github.com/juniyasyos/${NAME}.git]: " input_repo
-    REPO="${input_repo:-https://github.com/juniyasyos/${NAME}.git}"
-
-    read -r -p "  Branch         [main]: " input_branch
-    BRANCH="${input_branch:-main}"
-
-    read -r -p "  Source dir     [${NAME}]: " input_src_dir
-    SOURCE_DIR="${input_src_dir:-$NAME}"
-
-    read -r -p "  Image name     [juniyasyos/${NAME}]: " input_image
-    IMAGE="${input_image:-juniyasyos/${NAME}}"
-
-    read -r -p "  Version        [v1.0.0]: " input_ver
-    VERSION="${input_ver:-v1.0.0}"
-
-    read -r -p "  Port           [${default_port}]: " input_port
-    PORT="${input_port:-$default_port}"
-
-    read -r -p "  Domain         [${NAME}.local]: " input_domain
-    DOMAIN="${input_domain:-${NAME}.local}"
-
-    read -r -p "  Database name  [${NAME}_db]: " input_db
-    DATABASE="${input_db:-${NAME}_db}"
-
-    local default_db_user="${NAME}_user"
-    read -r -p "  DB user        [${default_db_user}]: " input_db_user
-    DB_USER="${input_db_user:-$default_db_user}"
-
-    local default_db_pass="${NAME}-password"
-    read -r -p "  DB password    [${default_db_pass}]: " input_db_pass
-    DB_PASSWORD="${input_db_pass:-$default_db_pass}"
-
-    read -r -p "  Queue worker?  [Y/n]: " input_queue
-    HAS_QUEUE=true
-    [[ "$input_queue" =~ ^[Nn] ]] && HAS_QUEUE=false
-
-    read -r -p "  Scheduler?     [Y/n]: " input_scheduler
-    HAS_SCHEDULER=true
-    [[ "$input_scheduler" =~ ^[Nn] ]] && HAS_SCHEDULER=false
-
-    read -r -p "  Prod env?      [Y/n]: " input_prod
-    HAS_PROD_ENV=true
-    [[ "$input_prod" =~ ^[Nn] ]] && HAS_PROD_ENV=false
-
-    read -r -p "  Local deps?    [y/N]: " input_deps
-    HAS_DEPS=false
-    [[ "$input_deps" =~ ^[Yy] ]] && HAS_DEPS=true
-
-    echo ""
-    echo "╔═══════════════════════════════════════════════════════════════╗"
-    echo "║  Ringkasan                                                    ║"
-    echo "╠═══════════════════════════════════════════════════════════════╣"
-    echo "║  App:        ${NAME}"
-    echo "║  Desc:       ${DESC}"
-    echo "║  Repo:       ${REPO}"
-    echo "║  Branch:     ${BRANCH}"
-    echo "║  Source:     ${SOURCE_DIR}"
-    echo "║  Image:      ${IMAGE}:${VERSION}"
-    echo "║  Port:       ${PORT}"
-    echo "║  Database:   ${DATABASE} (user: ${DB_USER})"
-    echo "║  Queue:      ${HAS_QUEUE}"
-    echo "║  Scheduler:  ${HAS_SCHEDULER}"
-    echo "║  Prod env:   ${HAS_PROD_ENV}"
-    echo "║  Local deps: ${HAS_DEPS}"
-    echo "╚═══════════════════════════════════════════════════════════════╝"
-    echo ""
-
-    read -r -p "  Konfirmasi generate? [Y/n]: " confirm
-    if [[ "$confirm" =~ ^[Nn] ]]; then
-        log_warn "Dibatalkan."
-        exit 1
-    fi
-
-    # ── Store as app.yml for reference ──
-    mkdir -p "${PROJECT_DIR}/apps/${NAME}"
-    cat > "${PROJECT_DIR}/apps/${NAME}/app.yml" << APPYML
-# ${DESC}
-name: ${NAME}
-repo: ${REPO}
-branch: ${BRANCH}
-source_dir: ${SOURCE_DIR}
-image: ${IMAGE}
-version: ${VERSION}
-port: ${PORT}
-domain: ${DOMAIN}
-database: ${DATABASE}
-db_user: ${DB_USER}
-db_password: ${DB_PASSWORD}
-queue: ${HAS_QUEUE}
-scheduler: ${HAS_SCHEDULER}
-php_version: "8.4"
-has_prod_env: ${HAS_PROD_ENV}
-has_local_deps: ${HAS_DEPS}
-description: ${DESC}
-APPYML
-    log_success "Created apps/${NAME}/app.yml"
-
-    # ── Generate all files ──
-    scaffold_generate_all "$NAME" "$SOURCE_DIR" "$IMAGE" "$VERSION" "$PORT" \
-        "$DATABASE" "$DB_USER" "$DB_PASSWORD" "$DESC" \
-        "$HAS_QUEUE" "$HAS_SCHEDULER" "$REPO" "$BRANCH" "$HAS_PROD_ENV" "$HAS_DEPS"
+    echo "# ${label}"
+    echo "${key}=${value}"
+  } >> "$target"
 }
 
-# ============================================
-# Generate all files for an app
-# ============================================
-scaffold_generate_all() {
-    local name="$1" source_dir="$2" image="$3" version="$4" port="$5"
-    local database="$6" db_user="$7" db_password="$8" desc="$9"
-    local has_queue="${10}" has_scheduler="${11}" repo="${12}" branch="${13}"
-    local has_prod_env="${14}" has_deps="${15}"
+append_csv_once() {
+  local target="$1"
+  local app_name="$2"
+  local row="$3"
 
-    log_header "📦 Generating files for ${name}..."
+  ensure_dir "$(dirname "$target")"
+  touch "$target"
 
-    gen_compose_app "$name" "$source_dir" "$image" "$version" "$port" \
-        "$database" "$db_user" "$db_password" "$desc" \
-        "$has_queue" "$has_scheduler"
+  if grep -qE "^${app_name}," "$target"; then
+    log_warn "  ${app_name} already exists in repos.csv, skipping"
+    return 0
+  fi
 
-    gen_dockerfile "$name" "$source_dir" "$desc"
-    gen_env_example "$name" "$port" "$db_user" "$db_password" "$database"
-
-    # Insert into YAML files (via Python)
-    log_info "  Inserting into compose.yml..."
-    py_insert_compose_yml "$name" "$source_dir" "$has_queue" "$has_scheduler" "$desc" || {
-        log_error "Failed to update compose.yml"
-        exit 1
-    }
-    log_success "  compose.yml updated"
-
-    log_info "  Inserting into compose/base/web.yml..."
-    py_insert_web_yml "$name" "$source_dir" "$port" || {
-        log_error "Failed to update web.yml"
-        exit 1
-    }
-    log_success "  compose/base/web.yml updated"
-
-    log_info "  Inserting into compose/build.yml..."
-    py_insert_build_yml "$name" "$source_dir" "$db_user" "$db_password" "$database" "$desc" || {
-        log_error "Failed to update build.yml"
-        exit 1
-    }
-    log_success "  compose/build.yml updated"
-
-    # Append to flat files
-    append_repos_csv "$name" "$source_dir" "$repo" "$branch" "$has_prod_env" "$has_deps" "$desc"
-    append_nginx_conf "$name" "$source_dir" "$port" "$desc"
-    append_sql_init "$name" "$database" "$db_user" "$db_password"
-    append_env_files "$name" "$port"
-    update_rsch_help "$name" "$port" "$desc"
-
-    log_success "✅ Semua file untuk ${name} telah digenerate!"
+  echo "$row" >> "$target"
 }
 
-# ============================================
-# Generate compose/apps/<name>.yml
-# ============================================
-gen_compose_app() {
-    local name="$1" source_dir="$2" image="$3" version="$4" port="$5"
-    local database="$6" db_user="$7" db_pass="$8" desc="$9"
-    local has_queue="${10}" has_scheduler="${11}"
+# -----------------------------------------------------------------------------
+# Validation
+# -----------------------------------------------------------------------------
+required_templates=(
+  "app-yml.tpl"
+  "compose-app.yml.tpl"
+  "compose-main-services.yml.tpl"
+  "compose-main-volumes.yml.tpl"
+  "compose-web-port.yml.tpl"
+  "compose-web-volume.yml.tpl"
+  "nginx-app.conf.tpl"
+  "build-service.yml.tpl"
+  "env-example.tpl"
+  "sql-init.tpl"
+)
 
-    local target="${PROJECT_DIR}/compose/apps/${name}.yml"
+check_requirements() {
+  log_header "Checking scaffold requirements"
 
-    log_info "  compose/apps/${name}.yml"
+  require_cmd python3
+  require_cmd grep
+  require_cmd sed
+  require_cmd awk
 
-    cat > "$target" << COMPEOF
-# ${desc}
-name: service-${name}
+  [ -d "$TEMPLATE_DIR" ] || die "Template directory not found: $TEMPLATE_DIR"
 
-services:
-  app:
-    extends:
-      file: ../base/php-base.yml
-      service: php-app-base
-    image: ${image}:${version}
-    container_name: ${name}-app
-    working_dir: /var/www/${source_dir}
-    env_file:
-      - ../../apps/${name}/.env.example
-    environment:
-      APP_ENV: production
-      APP_DEBUG: "true"
-      APP_WORKDIR: /var/www/${source_dir}
-      PUBLIC_VOLUME: /var/www/${source_dir}/public
-      APP_URL: "${HOST_IP}:${port}"
-      TRUSTED_PROXIES: "*"
-      DB_HOST: database-service
-      DB_USERNAME: ${db_user}
-      DB_PASSWORD: ${db_pass}
-      DB_DATABASE: ${database}
-      SKIP_PUBLIC_SYNC: "true"
-      AWS_ACCESS_KEY_ID: admin
-      AWS_SECRET_ACCESS_KEY: password
-      AWS_BUCKET: ${name}
-      AWS_URL: ${HOST_IP}:9090/${name}
-      AWS_ENDPOINT: http://minio:9090
-    volumes:
-      - ${name}_storage:/var/www/${source_dir}/storage
-      - ${name}_bootstrap_cache:/var/www/${source_dir}/bootstrap/cache
-      - ${name}_public:/var/www/${source_dir}/public
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: "1"
-        reservations:
-          memory: 512M
-          cpus: "0.5"
-COMPEOF
-
-    if [ "${has_queue}" = "true" ]; then
-        cat >> "$target" << COMPEOF
-
-  queue:
-    extends:
-      file: ../base/php-base.yml
-      service: php-worker-base
-    image: ${image}:${version}
-    container_name: ${name}-queue
-    working_dir: /var/www/${source_dir}
-    env_file:
-      - ../../apps/${name}/.env.example
-    environment:
-      DB_HOST: database-service
-      DB_USERNAME: ${db_user}
-      DB_PASSWORD: ${db_pass}
-    volumes:
-      - ${name}_storage:/var/www/${source_dir}/storage
-      - ${name}_bootstrap_cache:/var/www/${source_dir}/bootstrap/cache
-    command: >
-      artisan queue:work
-        --sleep=5
-        --tries=3
-        --timeout=120
-        --max-jobs=500
-        --max-time=3600
-    deploy:
-      resources:
-        limits:
-          memory: 384M
-          cpus: "0.5"
-        reservations:
-          memory: 128M
-          cpus: "0.25"
-COMPEOF
-    fi
-
-    if [ "${has_scheduler}" = "true" ]; then
-        cat >> "$target" << COMPEOF
-
-  scheduler:
-    extends:
-      file: ../base/php-base.yml
-      service: php-scheduler-base
-    image: ${image}:${version}
-    container_name: ${name}-scheduler
-    working_dir: /var/www/${source_dir}
-    env_file:
-      - ../../apps/${name}/.env.example
-    environment:
-      DB_HOST: database-service
-      DB_USERNAME: ${db_user}
-      DB_PASSWORD: ${db_pass}
-    volumes:
-      - ${name}_storage:/var/www/${source_dir}/storage
-      - ${name}_bootstrap_cache:/var/www/${source_dir}/bootstrap/cache
-    command: >
-      artisan schedule:work
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-          cpus: "0.2"
-        reservations:
-          memory: 64M
-          cpus: "0.1"
-COMPEOF
-    fi
-
-    log_success "  Created compose/apps/${name}.yml"
-}
-
-# ============================================
-# Generate Dockerfile
-# ============================================
-gen_dockerfile() {
-    local name="$1" source_dir="$2" desc="$3"
-    local target="${PROJECT_DIR}/apps/${name}/Dockerfile"
-    local template="${PROJECT_DIR}/docker/php/Dockerfile.template"
-
-    log_info "  apps/${name}/Dockerfile"
-
-    if [ ! -f "$template" ]; then
-        log_error "Template not found: ${template}"
-        return 1
-    fi
-
-    cp "$template" "$target"
-
-    # Replace placeholders
-    sed -i "s|{{APP_NAME}}|${name}|g" "$target"
-    sed -i "s|{{APP_DIR}}|${source_dir}|g" "$target"
-    sed -i "s|{{DESCRIPTION}}|${desc}|g" "$target"
-
-    log_success "  Created apps/${name}/Dockerfile (from template)"
-}
-
-# ============================================
-# Generate .env.example
-# ============================================
-gen_env_example() {
-    local name="$1" port="$2" db_user="$3" db_pass="$4" database="$5"
-    local target="${PROJECT_DIR}/apps/${name}/.env.example"
-
-    log_info "  apps/${name}/.env.example"
-
-    cat > "$target" << ENVEOF
-# ===========================================
-# PRODUCTION ENVIRONMENT CONFIGURATION
-# ===========================================
-
-# Application
-APP_NAME="${name}"
-APP_ENV=production
-APP_KEY=
-APP_DEBUG=false
-APP_URL=${HOST_IP}:${port}
-
-# Database
-DB_CONNECTION=mysql
-DB_HOST=database-service
-DB_PORT=3306
-DB_DATABASE=${database}
-DB_USERNAME=${db_user}
-DB_PASSWORD=${db_pass}
-
-# Redis
-REDIS_HOST=redis
-REDIS_PASSWORD=null
-REDIS_PORT=6379
-
-# Cache & Queue
-CACHE_DRIVER=file
-QUEUE_CONNECTION=database
-SESSION_DRIVER=database
-SESSION_LIFETIME=120
-
-# Mail
-MAIL_MAILER=smtp
-MAIL_HOST=smtp.example.com
-MAIL_PORT=587
-MAIL_USERNAME=
-MAIL_PASSWORD=
-MAIL_ENCRYPTION=tls
-MAIL_FROM_ADDRESS=noreply@your-domain.com
-MAIL_FROM_NAME="\${APP_NAME}"
-
-# Storage
-AWS_ACCESS_KEY_ID=admin
-AWS_SECRET_ACCESS_KEY=password
-AWS_DEFAULT_REGION=us-east-1
-AWS_BUCKET=${name}
-AWS_ENDPOINT=http://minio:9090
-AWS_URL=${HOST_IP}:9090/${name}
-AWS_USE_PATH_STYLE_ENDPOINT=true
-
-# Logging
-LOG_CHANNEL=stack
-LOG_LEVEL=debug
-ENVEOF
-
-    log_success "  Created apps/${name}/.env.example"
-}
-
-# ============================================
-# Append to repos.csv
-# ============================================
-append_repos_csv() {
-    local name="$1" source_dir="$2" repo="$3" branch="$4"
-    local has_prod_env="$5" has_deps="$6" desc="$7"
-    local prod_flag="no" deps_flag="no"
-    [ "${has_prod_env}" = "true" ] && prod_flag="yes"
-    [ "${has_deps}" = "true" ] && deps_flag="yes"
-
-    local target="${PROJECT_DIR}/repos.csv"
-
-    echo "${name},${source_dir},${repo},${branch},${prod_flag},${deps_flag},${desc}" >> "$target"
-    log_success "  Appended to repos.csv"
-}
-
-# ============================================
-# Append server block to nginx config
-# ============================================
-append_nginx_conf() {
-    local name="$1" source_dir="$2" port="$3" desc="$4"
-    local target="${PROJECT_DIR}/docker/nginx/conf.d/${name}.conf"
-
-    log_info "  docker/nginx/conf.d/${name}.conf"
-
-    mkdir -p "$(dirname "$target")"
-
-    cat > "$target" << NGINXEOF
-# =========================
-# ${desc} (Port ${port})
-# =========================
-server {
-    listen ${port};
-    server_name _;
-    root /var/www/${source_dir}/public;
-    index index.php index.html index.htm;
-
-    client_max_body_size 100M;
-
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-XSS-Protection "1; mode=block" always;
-    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-    add_header Access-Control-Allow-Origin "*" always;
-    add_header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, PATCH, OPTIONS" always;
-    add_header Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, Accept" always;
-    add_header Access-Control-Max-Age "3600" always;
-
-    if (\$request_method = 'OPTIONS') {
-        return 204;
-    }
-
-    # Catch 502/503/504 and route to maintenance page
-    error_page 502 503 504 /maintenance.html;
-    location = /maintenance.html {
-        root /usr/share/nginx/html;
-        internal;
-    }
-
-    location /health {
-        access_log off;
-        return 200 "OK\n";
-        add_header Content-Type text/plain;
-    }
-
-    location ~* ^/(build|assets)/ {
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-        try_files \$uri =404;
-    }
-
-    location ^~ /livewire/ {
-        try_files \$uri \$uri/ /index.php?\$query_string;
-    }
-
-    location ~* \\.(css|js|jpg|jpeg|png|gif|svg|webp|woff|woff2|ttf|eot)$ {
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-        try_files \$uri =404;
-    }
-
-    location / {
-        try_files \$uri \$uri/ /index.php?\$query_string;
-    }
-
-    location ~ \\.php\$ {
-        resolver 127.0.0.11 valid=30s;
-        set \$upstream_app app-${name};
-        try_files \$uri =404;
-        fastcgi_split_path_info ^(.+\\.php)(/.+)\$;
-        fastcgi_pass \$upstream_app:9000;
-        fastcgi_read_timeout 3600;
-        fastcgi_index index.php;
-        include fastcgi_params;
-        fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
-        fastcgi_param PATH_INFO \$fastcgi_path_info;
-        fastcgi_param HTTP_X_FORWARDED_FOR \$remote_addr;
-        fastcgi_param HTTP_X_FORWARDED_PROTO \$scheme;
-        fastcgi_param HTTP_X_FORWARDED_HOST \$server_name;
-        send_timeout 3600;
-        proxy_connect_timeout 3600;
-        proxy_read_timeout 3600;
-        proxy_send_timeout 3600;
-    }
-
-    location ~ /\. {
-        deny all;
-        access_log off;
-        log_not_found off;
-    }
-
-    access_log /var/log/nginx/${name}_access.log main;
-    error_log /var/log/nginx/${name}_error.log warn;
-}
-NGINXEOF
-
-    log_success "  Modular Nginx configuration created"
-}
-
-# ============================================
-# Append SQL init for database
-# ============================================
-append_sql_init() {
-    local name="$1" database="$2" db_user="$3" db_password="$4"
-    local target="${PROJECT_DIR}/docker/db/sql/00-init-multi-db.sql"
-
-    log_info "  docker/db/sql/00-init-multi-db.sql"
-
-    cat >> "$target" << SQLEOF
-
--- =================================================
---  ${name} Database
--- =================================================
-CREATE DATABASE IF NOT EXISTS ${database}
-  CHARACTER SET utf8mb4
-  COLLATE utf8mb4_unicode_ci;
-
-CREATE USER IF NOT EXISTS '${db_user}'@'%'
-  IDENTIFIED BY '${db_password}';
-
-GRANT ALL PRIVILEGES
-  ON ${database}.* TO '${db_user}'@'%';
-
-CREATE USER IF NOT EXISTS '${db_user}_readonly'@'%'
-  IDENTIFIED BY '${name}@ReadOnly2025!';
-
-GRANT SELECT ON ${database}.* TO '${db_user}_readonly'@'%';
-SQLEOF
-
-    # Ensure FLUSH PRIVILEGES stays at the end
-    # Remove any duplicate FLUSH and re-append at the end
-    local flush_lines
-    flush_lines=$(grep -c "FLUSH PRIVILEGES" "$target" 2>/dev/null || echo "0")
-    if [ "$flush_lines" -gt 1 ]; then
-        # Remove last line (the flush) and all trailing whitespace
-        head -n -1 "$target" > "${target}.tmp"
-        mv "${target}.tmp" "$target"
-        # Trim trailing blank lines
-        sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' "$target" 2>/dev/null || true
-        echo "" >> "$target"
-        echo "FLUSH PRIVILEGES;" >> "$target"
-    fi
-
-    log_success "  SQL init appended"
-}
-
-# ============================================
-# Update env files
-# ============================================
-append_env_files() {
-    local name="$1" port="$2"
-    local name_upper
-    name_upper=$(echo "$name" | tr '[:lower:]' '[:upper:]')
-
-    for env_file in "${PROJECT_DIR}/env/prod.env" "${PROJECT_DIR}/env/dev.env"; do
-        if [ -f "$env_file" ]; then
-            # Insert before the last line (which is often blank or the last var)
-            # or at the end after last meaningful content
-            local entry="${name_upper}_HOST_PORT=${port}"
-            if grep -q "^${entry}$" "$env_file" 2>/dev/null; then
-                log_warn "  ${entry} already exists in $(basename $env_file), skipping"
-            else
-                # Insert before trailing blank lines at end
-                local tmpfile
-                tmpfile=$(mktemp)
-                # Remove trailing blank lines, add our entry, then one blank line
-                sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' "$env_file" > "$tmpfile"
-                echo "" >> "$tmpfile"
-                echo "# ${name}" >> "$tmpfile"
-                echo "${entry}" >> "$tmpfile"
-                mv "$tmpfile" "$env_file"
-                log_success "  Added ${entry} to $(basename $env_file)"
-            fi
-        fi
-    done
-}
-
-# ============================================
-# Update rsch help
-# ============================================
-update_rsch_help() {
-    local name="$1" port="$2" desc="$3"
-    local target="${PROJECT_DIR}/rsch"
-
-    # Check if already exists in help
-    if grep -q "^    ${name}[[:space:]]" "$target" 2>/dev/null; then
-        log_warn "  ${name} already in rsch help, skipping"
-        return
-    fi
-
-    sed -i "/^APPS:/a\    ${name}\t — ${desc} (port ${port})" "$target"
-    log_success "  Added to rsch help"
-}
-
-# ============================================
-# Main (when called directly, not sourced)
-# ============================================
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    if [ $# -eq 0 ] || [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
-        echo "Usage: scripts/scaffold.sh <app-name> [--auto]"
-        echo ""
-        echo "  <app-name>   Scaffold a new app (interactive)"
-        echo "  --auto        Read apps/<name>/app.yml and generate silently"
-        exit 0
-    fi
-
-    if [ "${2:-}" = "--auto" ]; then
-        # Read from app.yml and generate
-        local app_yml="${PROJECT_DIR}/apps/${1}/app.yml"
-        if [ ! -f "$app_yml" ]; then
-            log_error "File not found: ${app_yml}"
-            exit 1
-        fi
-        scaffold_generate_all \
-            "$1" \
-            "$(grep -E "^source_dir:" "$app_yml" | sed 's/^[^:]*:[[:space:]]*//')" \
-            "$(grep -E "^image:" "$app_yml" | sed 's/^[^:]*:[[:space:]]*//')" \
-            "$(grep -E "^version:" "$app_yml" | sed 's/^[^:]*:[[:space:]]*//')" \
-            "$(grep -E "^port:" "$app_yml" | sed 's/^[^:]*:[[:space:]]*//')" \
-            "$(grep -E "^database:" "$app_yml" | sed 's/^[^:]*:[[:space:]]*//')" \
-            "$(grep -E "^db_user:" "$app_yml" | sed 's/^[^:]*:[[:space:]]*//')" \
-            "$(grep -E "^db_password:" "$app_yml" | sed 's/^[^:]*:[[:space:]]*//')" \
-            "$(grep -E "^description:" "$app_yml" | sed 's/^[^:]*:[[:space:]]*//')" \
-            "$(grep -E "^queue:" "$app_yml" | sed 's/^[^:]*:[[:space:]]*//')" \
-            "$(grep -E "^scheduler:" "$app_yml" | sed 's/^[^:]*:[[:space:]]*//')" \
-            "$(grep -E "^repo:" "$app_yml" | sed 's/^[^:]*:[[:space:]]*//')" \
-            "$(grep -E "^branch:" "$app_yml" | sed 's/^[^:]*:[[:space:]]*//')" \
-            "$(grep -E "^has_prod_env:" "$app_yml" | sed 's/^[^:]*:[[:space:]]*//')" \
-            "$(grep -E "^has_local_deps:" "$app_yml" | sed 's/^[^:]*:[[:space:]]*//')"
+  for tpl in "${required_templates[@]}"; do
+    if [ -f "${TEMPLATE_DIR}/${tpl}" ]; then
+      log_success "Template found: ${tpl}"
     else
-        scaffold_interactive "$1"
+      log_error "Template missing: ${tpl}"
+      return 1
     fi
-fi
+  done
+
+  log_success "All requirements OK"
+}
+
+list_templates() {
+  log_header "Available templates"
+
+  if [ ! -d "$TEMPLATE_DIR" ]; then
+    log_warn "Template directory does not exist: $TEMPLATE_DIR"
+    return 0
+  fi
+
+  find "$TEMPLATE_DIR" -maxdepth 1 -type f -name "*.tpl" -printf "  - %f\n" | sort
+}
+
+# -----------------------------------------------------------------------------
+# Port detection
+# -----------------------------------------------------------------------------
+detect_next_port() {
+  local highest_port=8300
+  local p
+
+  if [ -f "${PROJECT_DIR}/compose/base/web.yml" ]; then
+    while read -r p; do
+      [ -n "$p" ] || continue
+      if [ "$p" -gt "$highest_port" ]; then
+        highest_port="$p"
+      fi
+    done < <(grep -oP '\${[A-Z0-9_]+_HOST_PORT:-\K[0-9]+' "${PROJECT_DIR}/compose/base/web.yml" 2>/dev/null || true)
+  fi
+
+  for env_file in "${PROJECT_DIR}/env/prod.env" "${PROJECT_DIR}/env/dev.env" "${PROJECT_DIR}/env/local.env"; do
+    [ -f "$env_file" ] || continue
+
+    while read -r p; do
+      [ -n "$p" ] || continue
+      if [ "$p" -gt "$highest_port" ]; then
+        highest_port="$p"
+      fi
+    done < <(grep -oP 'HOST_PORT=\K[0-9]+' "$env_file" 2>/dev/null || true)
+  done
+
+  echo $((highest_port + 10))
+}
+
+# -----------------------------------------------------------------------------
+# Load app config and export variables for templates
+# -----------------------------------------------------------------------------
+load_app_config() {
+  local app_name="$1"
+  local app_yml="${PROJECT_DIR}/apps/${app_name}/app.yml"
+
+  [ -f "$app_yml" ] || die "App config not found: $app_yml"
+
+  APP_NAME="$(yaml_get "$app_yml" "name")"
+  APP_NAME="${APP_NAME:-$app_name}"
+
+  APP_DESC="$(yaml_get "$app_yml" "description")"
+  APP_DESC="${APP_DESC:-${APP_NAME} - Application}"
+
+  APP_REPO="$(yaml_get "$app_yml" "repo")"
+  APP_REPO="${APP_REPO:-https://github.com/juniyasyos/${APP_NAME}.git}"
+
+  APP_BRANCH="$(yaml_get "$app_yml" "branch")"
+  APP_BRANCH="${APP_BRANCH:-main}"
+
+  SOURCE_DIR="$(yaml_get "$app_yml" "source_dir")"
+  SOURCE_DIR="${SOURCE_DIR:-$APP_NAME}"
+
+  IMAGE_NAME="$(yaml_get "$app_yml" "image")"
+  IMAGE_NAME="${IMAGE_NAME:-juniyasyos/${APP_NAME}}"
+
+  IMAGE_VERSION="$(yaml_get "$app_yml" "version")"
+  IMAGE_VERSION="${IMAGE_VERSION:-v1.0.0}"
+
+  APP_PORT="$(yaml_get "$app_yml" "port")"
+  APP_PORT="${APP_PORT:-$(detect_next_port)}"
+
+  APP_DOMAIN="$(yaml_get "$app_yml" "domain")"
+  APP_DOMAIN="${APP_DOMAIN:-${APP_NAME}.local}"
+
+  DB_NAME="$(yaml_get "$app_yml" "database")"
+  DB_NAME="${DB_NAME:-${APP_NAME}_db}"
+
+  DB_USER="$(yaml_get "$app_yml" "db_user")"
+  DB_USER="${DB_USER:-${APP_NAME}_user}"
+
+  DB_PASSWORD="$(yaml_get "$app_yml" "db_password")"
+  DB_PASSWORD="${DB_PASSWORD:-${APP_NAME}_password}"
+
+  HAS_QUEUE="$(yaml_bool "$(yaml_get "$app_yml" "queue")")"
+  HAS_SCHEDULER="$(yaml_bool "$(yaml_get "$app_yml" "scheduler")")"
+  HAS_PROD_ENV="$(yaml_bool "$(yaml_get "$app_yml" "has_prod_env")")"
+  HAS_LOCAL_DEPS="$(yaml_bool "$(yaml_get "$app_yml" "has_local_deps")")"
+
+  PHP_VERSION="$(yaml_get "$app_yml" "php_version")"
+  PHP_VERSION="${PHP_VERSION:-8.4}"
+
+  APP_UPPER="$(to_upper "$APP_NAME")"
+  APP_LOWER="$(to_lower "$APP_NAME")"
+
+  HOST_PORT_VAR="${APP_UPPER}_HOST_PORT"
+
+  # Standard shared volume names.
+  # These names must match compose/base/web.yml and infra volumes.
+  PUBLIC_VOLUME_NAME="base_${APP_NAME}_public"
+  STORAGE_VOLUME_NAME="base_${APP_NAME}_storage"
+  BOOTSTRAP_CACHE_VOLUME_NAME="base_${APP_NAME}_bootstrap_cache"
+
+  # Service aliases expected by nginx fastcgi_pass.
+  APP_SERVICE_ALIAS="app-${APP_NAME}"
+  QUEUE_SERVICE_ALIAS="queue-${APP_NAME}"
+  SCHEDULER_SERVICE_ALIAS="scheduler-${APP_NAME}"
+
+  # Flags for optional template chunks
+  if [ "$HAS_QUEUE" = "true" ]; then
+    QUEUE_MAIN_SERVICE="$(render_template_to_stdout "${TEMPLATE_DIR}/compose-main-queue-service.yml.tpl" 2>/dev/null || true)"
+  else
+    QUEUE_MAIN_SERVICE=""
+  fi
+
+  if [ "$HAS_SCHEDULER" = "true" ]; then
+    SCHEDULER_MAIN_SERVICE="$(render_template_to_stdout "${TEMPLATE_DIR}/compose-main-scheduler-service.yml.tpl" 2>/dev/null || true)"
+  else
+    SCHEDULER_MAIN_SERVICE=""
+  fi
+
+  export \
+    APP_NAME APP_DESC APP_REPO APP_BRANCH SOURCE_DIR IMAGE_NAME IMAGE_VERSION \
+    APP_PORT APP_DOMAIN DB_NAME DB_USER DB_PASSWORD HAS_QUEUE HAS_SCHEDULER \
+    HAS_PROD_ENV HAS_LOCAL_DEPS PHP_VERSION APP_UPPER APP_LOWER HOST_PORT_VAR \
+    PUBLIC_VOLUME_NAME STORAGE_VOLUME_NAME BOOTSTRAP_CACHE_VOLUME_NAME \
+    APP_SERVICE_ALIAS QUEUE_SERVICE_ALIAS SCHEDULER_SERVICE_ALIAS \
+    QUEUE_MAIN_SERVICE SCHEDULER_MAIN_SERVICE
+}
+
+show_app_summary() {
+  cat <<EOF
+
+╔═══════════════════════════════════════════════════════════════╗
+║  Ringkasan App                                               
+╠═══════════════════════════════════════════════════════════════╣
+║  App:        ${APP_NAME}
+║  Desc:       ${APP_DESC}
+║  Repo:       ${APP_REPO}
+║  Branch:     ${APP_BRANCH}
+║  Source:     ${SOURCE_DIR}
+║  Image:      ${IMAGE_NAME}:${IMAGE_VERSION}
+║  Port:       ${APP_PORT}
+║  Domain:     ${APP_DOMAIN}
+║  Database:   ${DB_NAME}
+║  DB User:    ${DB_USER}
+║  Queue:      ${HAS_QUEUE}
+║  Scheduler:  ${HAS_SCHEDULER}
+║  Prod env:   ${HAS_PROD_ENV}
+║  Local deps: ${HAS_LOCAL_DEPS}
+╚═══════════════════════════════════════════════════════════════╝
+
+EOF
+}
+
+# -----------------------------------------------------------------------------
+# Create apps/<name>/app.yml interactively
+# -----------------------------------------------------------------------------
+create_app_yml_interactive() {
+  local app_name="$1"
+  local app_dir="${PROJECT_DIR}/apps/${app_name}"
+  local app_yml="${app_dir}/app.yml"
+
+  log_header "New app: ${app_name}"
+
+  if [ -f "$app_yml" ]; then
+    log_warn "App config already exists: ${app_yml}"
+    read -r -p "Overwrite app.yml? [y/N]: " overwrite
+    if [[ ! "$overwrite" =~ ^[Yy]$ ]]; then
+      log_warn "Cancelled."
+      exit 1
+    fi
+  fi
+
+  local default_port
+  default_port="$(detect_next_port)"
+
+  local name desc repo branch source_dir image version port domain database db_user db_password
+  local has_queue has_scheduler has_prod_env has_local_deps php_version
+
+  echo ""
+  echo "Isi detail aplikasi. Tekan Enter untuk memakai default."
+  echo ""
+
+  read -r -p "  Nama app       [${app_name}]: " name
+  name="${name:-$app_name}"
+
+  read -r -p "  Deskripsi      [${name} - Application]: " desc
+  desc="${desc:-${name} - Application}"
+
+  read -r -p "  Git repo URL   [https://github.com/juniyasyos/${name}.git]: " repo
+  repo="${repo:-https://github.com/juniyasyos/${name}.git}"
+
+  read -r -p "  Branch         [main]: " branch
+  branch="${branch:-main}"
+
+  read -r -p "  Source dir     [${name}]: " source_dir
+  source_dir="${source_dir:-$name}"
+
+  read -r -p "  Image name     [${name}]: " image
+  image="${image:-$name}"
+
+  read -r -p "  Version        [v1.0.0]: " version
+  version="${version:-v1.0.0}"
+
+  read -r -p "  Port           [${default_port}]: " port
+  port="${port:-$default_port}"
+
+  read -r -p "  Domain         [${name}.local]: " domain
+  domain="${domain:-${name}.local}"
+
+  read -r -p "  Database name  [${name}_db]: " database
+  database="${database:-${name}_db}"
+
+  read -r -p "  DB user        [${name}_user]: " db_user
+  db_user="${db_user:-${name}_user}"
+
+  read -r -p "  DB password    [${name}_password]: " db_password
+  db_password="${db_password:-${name}_password}"
+
+  read -r -p "  PHP version    [8.4]: " php_version
+  php_version="${php_version:-8.4}"
+
+  read -r -p "  Queue worker?  [Y/n]: " has_queue
+  if [[ "$has_queue" =~ ^[Nn]$ ]]; then
+    has_queue="false"
+  else
+    has_queue="true"
+  fi
+
+  read -r -p "  Scheduler?     [Y/n]: " has_scheduler
+  if [[ "$has_scheduler" =~ ^[Nn]$ ]]; then
+    has_scheduler="false"
+  else
+    has_scheduler="true"
+  fi
+
+  read -r -p "  Prod env?      [Y/n]: " has_prod_env
+  if [[ "$has_prod_env" =~ ^[Nn]$ ]]; then
+    has_prod_env="false"
+  else
+    has_prod_env="true"
+  fi
+
+  read -r -p "  Local deps?    [y/N]: " has_local_deps
+  if [[ "$has_local_deps" =~ ^[Yy]$ ]]; then
+    has_local_deps="true"
+  else
+    has_local_deps="false"
+  fi
+
+  export \
+    APP_NAME="$name" \
+    APP_DESC="$desc" \
+    APP_REPO="$repo" \
+    APP_BRANCH="$branch" \
+    SOURCE_DIR="$source_dir" \
+    IMAGE_NAME="$image" \
+    IMAGE_VERSION="$version" \
+    APP_PORT="$port" \
+    APP_DOMAIN="$domain" \
+    DB_NAME="$database" \
+    DB_USER="$db_user" \
+    DB_PASSWORD="$db_password" \
+    HAS_QUEUE="$has_queue" \
+    HAS_SCHEDULER="$has_scheduler" \
+    HAS_PROD_ENV="$has_prod_env" \
+    HAS_LOCAL_DEPS="$has_local_deps" \
+    PHP_VERSION="$php_version"
+
+  ensure_dir "$app_dir"
+
+  render_template "${TEMPLATE_DIR}/app-yml.tpl" "$app_yml"
+
+  log_success "Created apps/${name}/app.yml"
+
+  load_app_config "$name"
+  show_app_summary
+
+  read -r -p "Generate Docker config now? [Y/n]: " confirm
+  if [[ "$confirm" =~ ^[Nn]$ ]]; then
+    log_warn "Only app.yml created."
+    exit 0
+  fi
+}
+
+# -----------------------------------------------------------------------------
+# Render generated files
+# -----------------------------------------------------------------------------
+render_compose_app() {
+  log_info "Generating compose/apps/${APP_NAME}.yml"
+
+  render_template \
+    "${TEMPLATE_DIR}/compose-app.yml.tpl" \
+    "${PROJECT_DIR}/compose/apps/${APP_NAME}.yml"
+
+  log_success "Created compose/apps/${APP_NAME}.yml"
+}
+
+render_env_example() {
+  log_info "Generating apps/${APP_NAME}/.env.example"
+
+  render_template \
+    "${TEMPLATE_DIR}/env-example.tpl" \
+    "${PROJECT_DIR}/apps/${APP_NAME}/.env.example"
+
+  log_success "Created apps/${APP_NAME}/.env.example"
+}
+
+render_nginx_conf() {
+  log_info "Generating docker/nginx/conf.d/${APP_NAME}.conf"
+
+  render_template \
+    "${TEMPLATE_DIR}/nginx-app.conf.tpl" \
+    "${PROJECT_DIR}/docker/nginx/conf.d/${APP_NAME}.conf"
+
+  log_success "Created docker/nginx/conf.d/${APP_NAME}.conf"
+}
+
+render_dockerfile() {
+  local template="${PROJECT_DIR}/docker/php/Dockerfile.template"
+  local target="${PROJECT_DIR}/apps/${APP_NAME}/Dockerfile"
+
+  if [ ! -f "$template" ]; then
+    log_warn "Dockerfile template not found: ${template}, skipping"
+    return 0
+  fi
+
+  log_info "Generating apps/${APP_NAME}/Dockerfile"
+
+  export DESCRIPTION="$APP_DESC"
+
+  render_template "$template" "$target"
+
+  log_success "Created apps/${APP_NAME}/Dockerfile"
+}
+
+append_to_compose_main() {
+  local target="${PROJECT_DIR}/compose.yml"
+
+  [ -f "$target" ] || {
+    log_warn "compose.yml not found, skipping main compose update"
+    return 0
+  }
+
+  log_info "Updating compose.yml"
+
+  local service_block
+  service_block="$(render_template_to_stdout "${TEMPLATE_DIR}/compose-main-services.yml.tpl")"
+
+  local volume_block
+  volume_block="$(render_template_to_stdout "${TEMPLATE_DIR}/compose-main-volumes.yml.tpl")"
+
+  # Insert services before "# Named Volumes" if that marker exists.
+  # This matches your current compose.yml style.
+  insert_before_marker_once \
+    "$target" \
+    "# Named Volumes" \
+    "app-${APP_NAME}:" \
+    "$service_block"
+
+  # Insert volumes before "networks:".
+  insert_before_marker_once \
+    "$target" \
+    "networks:" \
+    "${APP_NAME}_public:" \
+    "$volume_block"
+
+  log_success "compose.yml updated"
+}
+
+append_to_web_base() {
+  local target="${PROJECT_DIR}/compose/base/web.yml"
+
+  [ -f "$target" ] || {
+    log_warn "compose/base/web.yml not found, skipping web compose update"
+    return 0
+  }
+
+  log_info "Updating compose/base/web.yml"
+
+  local port_block
+  port_block="$(render_template_to_stdout "${TEMPLATE_DIR}/compose-web-port.yml.tpl")"
+
+  local volume_block
+  volume_block="$(render_template_to_stdout "${TEMPLATE_DIR}/compose-web-volume.yml.tpl")"
+
+  insert_after_marker_once \
+    "$target" \
+    "x-web-ports:" \
+    "\${${HOST_PORT_VAR}:-${APP_PORT}}:${APP_PORT}" \
+    "$port_block"
+
+  insert_after_marker_once \
+    "$target" \
+    "x-web-volumes:" \
+    "${APP_NAME}_public:/var/www/${SOURCE_DIR}/public:ro" \
+    "$volume_block"
+
+  log_success "compose/base/web.yml updated"
+}
+
+append_to_build_compose() {
+  local target="${PROJECT_DIR}/compose/build.yml"
+
+  [ -f "$target" ] || {
+    log_warn "compose/build.yml not found, skipping build compose update"
+    return 0
+  }
+
+  log_info "Updating compose/build.yml"
+
+  local build_block
+  build_block="$(render_template_to_stdout "${TEMPLATE_DIR}/build-service.yml.tpl")"
+
+  append_once \
+    "$target" \
+    "${APP_NAME}:" \
+    "$build_block"
+
+  log_success "compose/build.yml updated"
+}
+
+append_to_sql_init() {
+  local target="${PROJECT_DIR}/docker/db/sql/00-init-multi-db.sql"
+
+  log_info "Updating database init SQL"
+
+  local sql_block
+  sql_block="$(render_template_to_stdout "${TEMPLATE_DIR}/sql-init.tpl")"
+
+  append_once \
+    "$target" \
+    "${DB_NAME} Database" \
+    "$sql_block"
+
+  # Keep FLUSH PRIVILEGES at the end.
+  if [ -f "$target" ]; then
+    sed -i '/^[[:space:]]*FLUSH PRIVILEGES;[[:space:]]*$/d' "$target"
+    {
+      echo ""
+      echo "FLUSH PRIVILEGES;"
+    } >> "$target"
+  fi
+
+  log_success "docker/db/sql/00-init-multi-db.sql updated"
+}
+
+append_to_repos_csv() {
+  local target="${PROJECT_DIR}/repos.csv"
+  local prod_flag="no"
+  local deps_flag="no"
+
+  [ "$HAS_PROD_ENV" = "true" ] && prod_flag="yes"
+  [ "$HAS_LOCAL_DEPS" = "true" ] && deps_flag="yes"
+
+  local row="${APP_NAME},${SOURCE_DIR},${APP_REPO},${APP_BRANCH},${prod_flag},${deps_flag},${APP_DESC}"
+
+  log_info "Updating repos.csv"
+
+  append_csv_once "$target" "$APP_NAME" "$row"
+
+  log_success "repos.csv updated"
+}
+
+append_to_env_files() {
+  local key="${HOST_PORT_VAR}"
+  local value="${APP_PORT}"
+
+  log_info "Updating env files"
+
+  for env_file in "${PROJECT_DIR}/env/prod.env" "${PROJECT_DIR}/env/dev.env" "${PROJECT_DIR}/env/local.env"; do
+    if [ -f "$env_file" ]; then
+      append_env_once "$env_file" "$key" "$value" "$APP_NAME"
+      log_success "$(basename "$env_file") updated"
+    fi
+  done
+}
+
+update_rsch_help() {
+  local target="${PROJECT_DIR}/rsch"
+
+  [ -f "$target" ] || {
+    log_warn "rsch script not found, skipping help update"
+    return 0
+  }
+
+  if grep -qE "^[[:space:]]+${APP_NAME}[[:space:]]" "$target"; then
+    log_warn "  ${APP_NAME} already exists in rsch help, skipping"
+    return 0
+  fi
+
+  if grep -q "^APPS:" "$target"; then
+    sed -i "/^APPS:/a\    ${APP_NAME}\t — ${APP_DESC} (port ${APP_PORT})" "$target"
+    log_success "rsch help updated"
+  else
+    log_warn "APPS marker not found in rsch, skipping help update"
+  fi
+}
+
+# -----------------------------------------------------------------------------
+# Main render pipeline
+# -----------------------------------------------------------------------------
+render_all() {
+  local app_name="$1"
+
+  check_requirements >/dev/null
+
+  load_app_config "$app_name"
+  show_app_summary
+
+  log_header "Generating Docker config for ${APP_NAME}"
+
+  ensure_dir "${PROJECT_DIR}/compose/apps"
+  ensure_dir "${PROJECT_DIR}/docker/nginx/conf.d"
+  ensure_dir "${PROJECT_DIR}/docker/db/sql"
+  ensure_dir "${PROJECT_DIR}/apps/${APP_NAME}"
+
+  render_compose_app
+  render_env_example
+  render_nginx_conf
+  render_dockerfile
+
+  append_to_compose_main
+  append_to_web_base
+  append_to_build_compose
+  append_to_sql_init
+  append_to_repos_csv
+  append_to_env_files
+  update_rsch_help
+
+  log_header "Done"
+  log_success "Generated config for ${APP_NAME}"
+
+  cat <<EOF
+
+Next check:
+
+  docker compose -f compose/apps/${APP_NAME}.yml config
+  docker compose -f compose.yml config | grep -A30 "${APP_NAME}_public"
+  docker compose -f compose/base/infra.yml config | grep -A30 "${APP_NAME}_public"
+
+Expected shared volumes:
+
+  ${APP_NAME}_public  -> ${PUBLIC_VOLUME_NAME}
+  ${APP_NAME}_storage -> ${STORAGE_VOLUME_NAME}
+
+EOF
+}
+
+# -----------------------------------------------------------------------------
+# Command router
+# -----------------------------------------------------------------------------
+main() {
+  local command="${1:-}"
+
+  case "$command" in
+    new)
+      local app_name="${2:-}"
+      local mode="${3:-}"
+
+      [ -n "$app_name" ] || die "App name is required."
+
+      if [ "$mode" = "--auto" ]; then
+        render_all "$app_name"
+      else
+        create_app_yml_interactive "$app_name"
+        render_all "$APP_NAME"
+      fi
+      ;;
+
+    render)
+      local app_name="${2:-}"
+      [ -n "$app_name" ] || die "App name is required."
+      render_all "$app_name"
+      ;;
+
+    list)
+      list_templates
+      ;;
+
+    check)
+      check_requirements
+      ;;
+
+    ""|--help|-h|help)
+      usage
+      ;;
+
+    *)
+      usage
+      die "Unknown command: $command"
+      ;;
+  esac
+}
+
+main "$@"

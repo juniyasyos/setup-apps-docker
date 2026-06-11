@@ -1,0 +1,2 @@
+  - {{APP_NAME}}_public:/var/www/{{SOURCE_DIR}}/public:ro
+  - {{APP_NAME}}_storage:/var/www/{{SOURCE_DIR}}/storage:ro
