@@ -8,8 +8,8 @@
 # ╚══════════════════════════════════════════════════════════╝
 x-apps: &apps
   siimut: { port: 8000 }
-  ikp:    { port: 8200 }
   iam:    { port: 8100 }
+  ikp:    { port: 8200 }
   lms:    { port: 7100 }
   smsp:   { port: 7200 }
   rbv:    { port: 7300 }
@@ -17,11 +17,11 @@ x-apps: &apps
 x-web-ports: &web-ports
   - "${WEB_PORTAL_PORT:-1000}:1000"
   - "${SIIMUT_HOST_PORT:-8000}:8000"
+  - "${IAM_HOST_PORT:-8100}:8100"
   - "${IKP_HOST_PORT:-8200}:8200"
   - "${LMS_HOST_PORT:-7100}:7100"
   - "${SMSP_HOST_PORT:-7200}:7200"
   - "${RBV_HOST_PORT:-7300}:7300"
-  - "${IAM_HOST_PORT:-8100}:8100"
 
 x-web-volumes: &web-volumes
   - ../../docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
@@ -37,8 +37,8 @@ x-web-volumes: &web-volumes
   - lms_storage:/var/www/lms-app/storage:ro
   - rbv_public:/var/www/rbv/public:ro
   - rbv_storage:/var/www/rbv/storage:ro
-  - smsp_public:/var/www/smsp/public:ro
-  - smsp_storage:/var/www/smsp/storage:ro
+  # - smsp_public:/var/www/smsp/public:ro
+  # - smsp_storage:/var/www/smsp/storage:ro
   - nginx_logs:/var/log/nginx
 
 services:

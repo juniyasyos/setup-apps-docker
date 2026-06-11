@@ -16,7 +16,7 @@ services:
       APP_DEBUG: "true"
       APP_WORKDIR: /var/www/rbv
       PUBLIC_VOLUME: /var/www/rbv/public
-      APP_URL: "${HOST_IP}:8080"
+      APP_URL: "${HOST_IP}:7300"
       TRUSTED_PROXIES: "*"
       DB_HOST: database-service
       DB_USERNAME: rbv_user
