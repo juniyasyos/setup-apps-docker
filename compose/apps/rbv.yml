@@ -99,3 +99,15 @@ services:
         reservations:
           memory: 64M
           cpus: "0.1"
+
+volumes:
+  rbv_public:
+    external: true
+    name: base_rbv_public
+
+  rbv_storage:
+    external: true
+    name: base_rbv_storage
+
+  rbv_bootstrap_cache:
+    name: base_rbv_bootstrap_cache

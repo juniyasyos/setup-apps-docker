@@ -1,4 +1,4 @@
-name: service-app-multi
+name: base
 
 include:
   - path: compose/base/web.yml
