@@ -140,11 +140,8 @@ RUN set -eux; \
 COPY --from=builder --chown=www:www /build ${APP_WORKDIR}
 
 RUN set -eux; \
-    mkdir -p storage storage/logs storage/framework/cache storage/framework/sessions storage/framework/views bootstrap/cache; \
-    touch storage/logs/laravel.log; \
     chown -R www:www storage bootstrap/cache; \
     chmod -R ug+rwX storage bootstrap/cache; \
-    chmod 664 storage/logs/laravel.log; \
     if [ -d public ]; then chmod -R 755 public; fi
 
 COPY docker/php/entrypoint-iam.sh /usr/local/bin/entrypoint.sh

@@ -7,6 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE_APPS="$SCRIPT_DIR/compose.yml"
 ENV_DEV="$SCRIPT_DIR/env/dev.env"
 ENV_PROD="$SCRIPT_DIR/env/prod.env"
+ENV_LOCAL="$SCRIPT_DIR/env/local.env"
 
 usage() {
   cat <<'EOF'
@@ -23,6 +24,7 @@ Commands:
 Flags:
   --dev          Use env/dev.env
   --prod         Use env/prod.env
+  --local        Use env/local.env
   --v, -v        Verbose docker compose output
   -h, --help     Show this help
 
@@ -77,6 +79,9 @@ while [[ $# -gt 0 ]]; do
     --prod)
       MODE="prod"
       ;;
+    --local)
+      MODE="local"
+      ;;
     --v|--verbose|-v)
       VERBOSE="true"
       ;;
@@ -103,6 +108,8 @@ ENV_FILE="$ENV_DEV"
 
 if [[ "$MODE" == "prod" ]]; then
   ENV_FILE="$ENV_PROD"
+elif [[ "$MODE" == "local" ]]; then
+  ENV_FILE="$ENV_LOCAL"
 fi
 
 if [[ ! -f "$ENV_FILE" ]]; then

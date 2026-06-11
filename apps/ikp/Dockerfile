@@ -179,13 +179,13 @@ COPY --from=builder --chown=www:www /build ${APP_WORKDIR}
 # Permissions & directory setup
 RUN set -eux; \
     # Create all Laravel cache directories
-    mkdir -p storage/framework/cache/data \
-             storage/framework/sessions \
-             storage/framework/views \
-             storage/framework/testing \
-             storage/logs \
-             storage/app/public \
-             bootstrap/cache; \
+    # mkdir -p storage/framework/cache/data \
+    #          storage/framework/sessions \
+    #          storage/framework/views \
+    #          storage/framework/testing \
+    #          storage/logs \
+    #          storage/app/public \
+    #          bootstrap/cache; \
     # Set ownership
     chown -R www:www storage bootstrap/cache; \
     # Set permissions (recursive write for cache dirs)

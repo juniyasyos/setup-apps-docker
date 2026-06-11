@@ -13,7 +13,7 @@ services:
       PMA_ARBITRARY: 1
       PMA_ABSOLUTE_URI: http://localhost:${PMA_PORT:-8888}/
       PMA_BLOWFISH_SECRET: password
-      MYSQL_ROOT_PASSWORD: rootpass123
+      MYSQL_ROOT_PASSWORD: rootpass123 
       UPLOAD_LIMIT: 1024M
       MEMORY_LIMIT: 1024M
       POST_MAX_SIZE: 1024M

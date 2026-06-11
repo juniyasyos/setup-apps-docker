@@ -186,13 +186,13 @@ COPY --from=builder --chown=www:www /build ${APP_WORKDIR}
 
 # Setup Laravel directories and permissions
 RUN set -eux; \
-    mkdir -p storage/framework/cache/data \
-             storage/framework/sessions \
-             storage/framework/views \
-             storage/framework/testing \
-             storage/logs \
-             storage/app/public \
-             bootstrap/cache; \
+    # mkdir -p storage/framework/cache/data \
+    #          storage/framework/sessions \
+    #          storage/framework/views \
+    #          storage/framework/testing \
+    #          storage/logs \
+    #          storage/app/public \
+    #          bootstrap/cache; \
     chown -R www:www storage bootstrap/cache; \
     chmod -R ug+rwX storage bootstrap/cache; \
     chmod -R 775 storage/framework/views; \

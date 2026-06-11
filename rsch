@@ -23,6 +23,9 @@ set -euo pipefail
 # =============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MODE_FILE="${SCRIPT_DIR}/.rsch-mode"
+DEFAULT_MODE="dev"
+
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
@@ -35,6 +38,42 @@ log_success() { echo -e "${GREEN}✅ $1${NC}"; }
 log_warn()    { echo -e "${YELLOW}⚠️  $1${NC}"; }
 log_error()   { echo -e "${RED}❌ $1${NC}"; }
 log_header()  { echo -e "\n${CYAN}════════════════════════════════════════════${NC}"; echo -e "${CYAN}   $1${NC}"; echo -e "${CYAN}════════════════════════════════════════════${NC}"; }
+
+# ──────────────────────────────────────────────
+# Environment Mode Helpers
+# ──────────────────────────────────────────────
+# Reads/stores the active deployment mode (dev|prod) from .rsch-mode
+# and resolves the corresponding env file for docker compose --env-file.
+
+_resolve_mode() {
+    local mode
+    if [[ -f "$MODE_FILE" ]]; then
+        mode="$(cat "$MODE_FILE" | tr -d '[:space:]')"
+        if [[ "$mode" != "dev" && "$mode" != "prod" && "$mode" != "local" ]]; then
+            mode="$DEFAULT_MODE"
+        fi
+    else
+        mode="$DEFAULT_MODE"
+    fi
+    echo "$mode"
+}
+
+_resolve_env_file() {
+    local mode
+    mode="$(_resolve_mode)"
+    if [[ "$mode" == "prod" ]]; then
+        echo "${SCRIPT_DIR}/env/prod.env"
+    elif [[ "$mode" == "local" ]]; then
+        echo "${SCRIPT_DIR}/env/local.env"
+    else
+        echo "${SCRIPT_DIR}/env/dev.env"
+    fi
+}
+
+_compose_cmd() {
+    local compose_file="${1:-${SCRIPT_DIR}/compose.yml}"
+    echo "docker compose --env-file $(_resolve_env_file) -f ${compose_file}"
+}
 
 show_help() {
     cat << 'EOF'
@@ -61,6 +100,7 @@ COMMANDS:
   Runtime:
     up [--dev|--prod]   Start all services
     down [--dev|--prod] Stop all services
+    use <dev|prod>      Set global environment mode
     run-app <app>...    Start specific app(s) (e.g. run-app siimut ikp)
     down-app <app>...   Stop specific app(s). Add -v to remove volumes
     restart <app>       Restart a specific app service
@@ -127,7 +167,7 @@ cmd_run_app() {
     done
 
     log_info "Starting: $*"
-    docker compose -f "${SCRIPT_DIR}/compose.yml" up -d "${services[@]}"
+    $(_compose_cmd) up -d "${services[@]}"
     log_success "Started: $*"
 }
 
@@ -168,11 +208,11 @@ cmd_down_app() {
 
     if [ "$remove_volumes" = true ]; then
         log_warn "Removing volumes for: ${apps[*]}"
-        docker compose -f "${SCRIPT_DIR}/compose.yml" down -v "${services[@]}"
+        $(_compose_cmd) down -v "${services[@]}"
         log_success "Stopped and removed volumes for: ${apps[*]}"
     else
         log_info "Stopping: ${apps[*]}"
-        docker compose -f "${SCRIPT_DIR}/compose.yml" down "${services[@]}"
+        $(_compose_cmd) down "${services[@]}"
         log_success "Stopped: ${apps[*]}"
     fi
 }
@@ -206,6 +246,21 @@ cmd_down() {
 }
 
 # ──────────────────────────────────────────────
+# Use — set global environment mode
+# Usage: ./rsch use dev|prod
+# ──────────────────────────────────────────────
+cmd_use() {
+    local mode="${1:-}"
+    if [[ "$mode" != "dev" && "$mode" != "prod" && "$mode" != "local" ]]; then
+        log_error "Usage: ./rsch use <dev|prod|local>"
+        exit 1
+    fi
+    echo "$mode" > "$MODE_FILE"
+    log_success "Mode set to: ${mode}"
+    log_info "Env file: $(_resolve_env_file)"
+}
+
+# ──────────────────────────────────────────────
 # Restart single app
 # ──────────────────────────────────────────────
 cmd_restart() {
@@ -215,7 +270,7 @@ cmd_restart() {
         exit 1
     fi
     log_info "Restarting app-${app}..."
-    docker compose -f "${SCRIPT_DIR}/compose.yml" restart "app-${app}" "queue-${app}" "scheduler-${app}"
+    $(_compose_cmd) restart "app-${app}" "queue-${app}" "scheduler-${app}"
     log_success "Restarted ${app}"
 }
 
@@ -228,7 +283,7 @@ cmd_logs() {
         log_error "Usage: ./rsch logs <app>"
         exit 1
     fi
-    docker compose -f "${SCRIPT_DIR}/compose.yml" logs -f --tail=100 "app-${app}" "queue-${app}"
+    $(_compose_cmd) logs -f --tail=100 "app-${app}" "queue-${app}"
 }
 
 # ──────────────────────────────────────────────
@@ -244,7 +299,7 @@ cmd_health() {
         "${SCRIPT_DIR}/scripts/health/check-${app}.sh"
     else
         log_warn "No health script for ${app}. Checking container status..."
-        docker compose -f "${SCRIPT_DIR}/compose.yml" ps "app-${app}"
+        $(_compose_cmd) ps "app-${app}"
     fi
 }
 
@@ -253,20 +308,21 @@ cmd_health() {
 # ──────────────────────────────────────────────
 cmd_infra() {
     local action="${1:-}"
+    local compose_file="${SCRIPT_DIR}/compose/base/infra.yml"
     case "$action" in
         up)
-            log_info "Starting infrastructure services..."
-            docker compose -f "${SCRIPT_DIR}/compose/base/infra.yml" up -d
+            log_info "Starting infrastructure services with $(_resolve_mode) env..."
+            $(_compose_cmd "${compose_file}") up -d
             log_success "Infrastructure started"
             ;;
         down)
             log_info "Stopping infrastructure services..."
-            docker compose -f "${SCRIPT_DIR}/compose/base/infra.yml" down
+            $(_compose_cmd "${compose_file}") down
             log_success "Infrastructure stopped"
             ;;
         restart)
             log_info "Restarting infrastructure services..."
-            docker compose -f "${SCRIPT_DIR}/compose/base/infra.yml" restart
+            $(_compose_cmd "${compose_file}") restart
             log_success "Infrastructure restarted"
             ;;
         *)
@@ -313,6 +369,7 @@ case "$COMMAND" in
     build)      cmd_build "$@" ;;
     up)         cmd_up "$@" ;;
     down)       cmd_down "$@" ;;
+    use)        cmd_use "$@" ;;
     run-app)    cmd_run_app "$@" ;;
     down-app)   cmd_down_app "$@" ;;
     restart)    cmd_restart "$@" ;;

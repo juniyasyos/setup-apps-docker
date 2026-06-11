@@ -16,7 +16,7 @@ services:
       APP_DEBUG: "true"
       APP_WORKDIR: /var/www/lms-app
       PUBLIC_VOLUME: /var/www/lms-app/public
-      APP_URL: "http://192.168.1.4:8080"
+      APP_URL: "http://${HOST_IP}:8080"
       TRUSTED_PROXIES: "*"
       DB_HOST: database-service
       DB_USERNAME: lms_user
@@ -26,7 +26,7 @@ services:
       AWS_ACCESS_KEY_ID: admin
       AWS_SECRET_ACCESS_KEY: password
       AWS_BUCKET: lms
-      AWS_URL: http://192.168.1.4:9090/lms
+      AWS_URL: http://${HOST_IP}:9090/lms
       AWS_ENDPOINT: http://minio:9090
     volumes:
       - lms_storage:/var/www/lms-app/storage

@@ -57,10 +57,3 @@ services:
 volumes:
   nginx_logs:
     driver: local
-  siimut_public:
-  siimut_storage:
-  ikp_public:
-  ikp_storage:
-  iam_public:
-  lms_public:
-  lms_storage:

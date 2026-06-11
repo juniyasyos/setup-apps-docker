@@ -276,7 +276,7 @@ scaffold_interactive() {
     # Also check repos.csv port column (implied by name pattern)
     if [ -f "${PROJECT_DIR}/repos.csv" ]; then
         # Some ports might be defined only in env files
-        for ef in "${PROJECT_DIR}/env/prod.env" "${PROJECT_DIR}/env/dev.env"; do
+        for ef in "${PROJECT_DIR}/env/prod.env" "${PROJECT_DIR}/env/dev.env" "${PROJECT_DIR}/env/local.env"; do
             if [ -f "$ef" ]; then
                 local env_ports
                 env_ports=$(grep -oP 'HOST_PORT=\K[0-9]+' "$ef" 2>/dev/null || echo "")
