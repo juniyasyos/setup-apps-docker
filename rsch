@@ -15,6 +15,7 @@ set -euo pipefail
 #   ./rsch run-app <app>...  Start specific app(s) (siimut ikp iam lms)
 #   ./rsch down-app <app>... Stop specific app(s) (-v for volumes)
 #   ./rsch restart <app>     Restart a single app service
+#   ./rsch exec <app> [cmd]   Exec into app container (default: sh)
 #   ./rsch logs <app>        Tail logs for an app
 #   ./rsch health <app>      Health check for an app
 #   ./rsch infra up|down     Start/stop infrastructure only
@@ -112,6 +113,7 @@ COMMANDS:
   Debug & Health:
     logs <app>          Show logs for a specific app
     health <app>        Run health check scripts
+    exec <app> [cmd]    Exec into app container (default: sh)
 
   Other:
     help                Show this help message
@@ -275,6 +277,28 @@ cmd_restart() {
 }
 
 # ──────────────────────────────────────────────
+# Exec — exec into app container (default: sh)
+# Usage: ./rsch exec siimut
+# Usage: ./rsch exec siimut bash
+# ──────────────────────────────────────────────
+cmd_exec() {
+    local app="${1:-}"
+    if [ -z "$app" ]; then
+        log_error "Usage: ./rsch exec <app> [command]"
+        echo ""
+        log_info "Available apps: siimut, ikp, iam, lms"
+        log_info "Example: ./rsch exec siimut"
+        log_info "         ./rsch exec siimut bash"
+        exit 1
+    fi
+    shift
+    local cmd="${*:-sh}"
+
+    log_info "Exec into app-${app} with: ${cmd}"
+    $(_compose_cmd) exec "app-${app}" $cmd
+}
+
+# ──────────────────────────────────────────────
 # Logs
 # ──────────────────────────────────────────────
 cmd_logs() {
@@ -373,6 +397,7 @@ case "$COMMAND" in
     run-app)    cmd_run_app "$@" ;;
     down-app)   cmd_down_app "$@" ;;
     restart)    cmd_restart "$@" ;;
+    exec)       cmd_exec "$@" ;;
     logs)       cmd_logs "$@" ;;
     health)     cmd_health "$@" ;;
     infra)      cmd_infra "$@" ;;
