@@ -1,0 +1,12 @@
+# Infrastructure Aggregator — Start all base services
+# Usage: docker compose -f compose/base/infra.yml up -d
+#
+# Includes: network, database, minio, phpmyadmin, portainer
+
+include:
+  - path: ./network.yml
+  - path: ./database.yml
+  - path: ./minio.yml
+  - path: ./phpmyadmin.yml
+  - path: ./web.yml
+  # - path: ./portainer.yml

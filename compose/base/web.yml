@@ -55,5 +55,19 @@ services:
       start_period: 10s
 
 volumes:
+  siimut_public:
+    driver: local
+  siimut_storage:
+    driver: local
+  ikp_public:
+    driver: local
+  ikp_storage:
+    driver: local
+  iam_public:
+    driver: local
+  lms_public:
+    driver: local
+  lms_storage:
+    driver: local
   nginx_logs:
     driver: local
