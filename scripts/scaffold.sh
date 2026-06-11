@@ -453,13 +453,13 @@ load_app_config() {
   SCHEDULER_SERVICE_ALIAS="scheduler-${APP_NAME}"
 
   # Flags for optional template chunks
-  if [ "$HAS_QUEUE" = "true" ]; then
+  if [ "$HAS_QUEUE" = "true" ] && [ -f "${TEMPLATE_DIR}/compose-main-queue-service.yml.tpl" ]; then
     QUEUE_MAIN_SERVICE="$(render_template_to_stdout "${TEMPLATE_DIR}/compose-main-queue-service.yml.tpl" 2>/dev/null || true)"
   else
     QUEUE_MAIN_SERVICE=""
   fi
 
-  if [ "$HAS_SCHEDULER" = "true" ]; then
+  if [ "$HAS_SCHEDULER" = "true" ] && [ -f "${TEMPLATE_DIR}/compose-main-scheduler-service.yml.tpl" ]; then
     SCHEDULER_MAIN_SERVICE="$(render_template_to_stdout "${TEMPLATE_DIR}/compose-main-scheduler-service.yml.tpl" 2>/dev/null || true)"
   else
     SCHEDULER_MAIN_SERVICE=""
@@ -940,4 +940,35 @@ main() {
   esac
 }
 
-main "$@"
+# -----------------------------------------------------------------------------
+# Backward compatibility
+# -----------------------------------------------------------------------------
+# Old usage:
+#   ./scripts/scaffold.sh smsp
+#   ./scripts/scaffold.sh smsp --auto
+#
+# New usage:
+#   ./scripts/scaffold.sh new smsp
+#   ./scripts/scaffold.sh render smsp
+# -----------------------------------------------------------------------------
+# Only run main when executed directly, not when sourced
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  if [ $# -ge 1 ]; then
+    case "${1:-}" in
+      new|render|list|check|help|--help|-h)
+        main "$@"
+        ;;
+      *)
+        # Compatibility mode for old callers such as:
+        #   ./rsch prepare smsp
+        if [ "${2:-}" = "--auto" ]; then
+          main new "$1" --auto
+        else
+          main new "$1"
+        fi
+        ;;
+    esac
+  else
+    main "$@"
+  fi
+fi

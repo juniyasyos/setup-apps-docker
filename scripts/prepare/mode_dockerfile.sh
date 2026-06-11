@@ -244,50 +244,9 @@ run_mode_dockerfile() {
     echo ""
     log_info "Memeriksa konfigurasi Nginx, Compose, dan Database..."
 
-    # Source scaffold.sh functions if needed
-    if ! declare -F gen_compose_app >/dev/null; then
-        source "${PROJECT_DIR}/scripts/scaffold.sh"
-    fi
-
-    # 1. Nginx Config
-    local nginx_path="${PROJECT_DIR}/docker/nginx/conf.d/${APP_NAME}.conf"
-    if [ ! -f "$nginx_path" ]; then
-        log_info "Generating Nginx Config → docker/nginx/conf.d/${APP_NAME}.conf"
-        append_nginx_conf "$APP_NAME" "$APP_DIR" "$port" "${APP_DESC:-App}"
-    else
-        log_success "Nginx Config sudah ada."
-    fi
-
-    # 2. Compose File
-    local compose_path="${PROJECT_DIR}/compose/apps/${APP_NAME}.yml"
-    if [ ! -f "$compose_path" ]; then
-        log_info "Generating Compose File → compose/apps/${APP_NAME}.yml"
-        gen_compose_app "$APP_NAME" "$APP_DIR" "$image" "$version" "$port" \
-            "$database" "$db_user" "$db_password" "${APP_DESC:-App}" \
-            "$queue" "$scheduler"
-
-        # Daftarkan ke compose files global
-        py_insert_compose_yml "$APP_NAME" "$APP_DIR" "$queue" "$scheduler" "${APP_DESC:-App}" || true
-        py_insert_web_yml "$APP_NAME" "$APP_DIR" "$port" || true
-        py_insert_build_yml "$APP_NAME" "$APP_DIR" "$db_user" "$db_password" "$database" "${APP_DESC:-App}" || true
-        append_env_files "$APP_NAME" "$port" || true
-    else
-        log_success "Compose File sudah ada."
-    fi
-
-    # 3. Database SQL Init Script
-    local sql_init_file="${PROJECT_DIR}/docker/db/sql/00-init-multi-db.sql"
-    if [ -f "$sql_init_file" ]; then
-        if ! grep -q "CREATE DATABASE IF NOT EXISTS ${database}" "$sql_init_file"; then
-            log_info "Appending Database SQL Init script → docker/db/sql/00-init-multi-db.sql"
-            append_sql_init "$APP_NAME" "$database" "$db_user" "$db_password"
-        else
-            log_success "Database SQL Init script sudah terdaftar."
-        fi
-    else
-        log_info "Generating Database SQL Init script → docker/db/sql/00-init-multi-db.sql"
-        append_sql_init "$APP_NAME" "$database" "$db_user" "$db_password"
-    fi
+    # Generate missing Nginx, Compose, Database configs via scaffold.sh
+    # Run as subprocess to avoid function/variable conflicts with prepare.sh
+    "${PROJECT_DIR}/scripts/scaffold.sh" render "$APP_NAME"
 
     echo ""
     echo "  ┌─────────────────────────────────────────────────────────┐"

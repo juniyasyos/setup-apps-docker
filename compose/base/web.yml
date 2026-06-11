@@ -82,6 +82,10 @@ volumes:
     driver: local
   lms_storage:
     driver: local
+  smsp_public:
+    driver: local
+  smsp_storage:
+    driver: local
   rbv_public:
     driver: local
   rbv_storage:
