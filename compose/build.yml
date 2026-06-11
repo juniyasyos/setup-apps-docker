@@ -110,3 +110,30 @@ services:
     image: lms:${LMS_VERSION:-latest}
     pull_policy: never
 
+  ####################################################################################################
+  #  RBV - Ruang Baca Virtual Platform
+  ####################################################################################################
+  rbv:
+    build:
+      context: ..
+      dockerfile: apps/rbv/Dockerfile
+      args:
+        UID: "1000"
+        GID: "1000"
+        TZ: "Asia/Jakarta"
+        APP_NAME: " RBV - Ruang Baca Virtual Platform"
+        APP_ENV: "production"
+        APP_DIR: "rbv-app"
+        DB_HOST: "database-service"
+        DB_USERNAME: "rbv_user"
+        DB_PASSWORD: "rbv_pass123"
+        DB_DATABASE: "rbv_db"
+        AWS_ACCESS_KEY_ID: "admin"
+        AWS_SECRET_ACCESS_KEY: "password"
+        AWS_BUCKET: "rbv"
+        AWS_URL: "http://minio:9090/rbv"
+        AWS_ENDPOINT: "http://minio:9090"
+        BUILD_TIMESTAMP: "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+    image: rbv:${RBV_VERSION:-latest}
+    pull_policy: never
+

@@ -470,6 +470,188 @@ select_prepare_mode() {
 }
 
 # ============================================
+# Auto-generate infrastructure if missing
+# ============================================
+
+ensure_app_infrastructure() {
+    local name="$APP_NAME"
+    local source_dir="$APP_DIR"
+    local desc="${APP_DESC:-${name}}"
+
+    # ── Cek file-file dasar ──
+    local apps_dir="${PROJECT_DIR}/apps/${name}"
+    local perlu_generate=false
+    local langkah_tambah=""
+
+    [ ! -f "${apps_dir}/app.yml" ]      && { langkah_tambah="${langkah_tambah}  • apps/${name}/app.yml\n";      perlu_generate=true; }
+    [ ! -f "${apps_dir}/Dockerfile" ]   && { langkah_tambah="${langkah_tambah}  • apps/${name}/Dockerfile\n";   perlu_generate=true; }
+    [ ! -f "${apps_dir}/.env.example" ] && { langkah_tambah="${langkah_tambah}  • apps/${name}/.env.example\n"; perlu_generate=true; }
+    [ ! -f "${PROJECT_DIR}/compose/apps/${name}.yml" ] && { langkah_tambah="${langkah_tambah}  • compose/apps/${name}.yml\n";                perlu_generate=true; }
+    [ ! -f "${PROJECT_DIR}/docker/nginx/conf.d/${name}.conf" ] && { langkah_tambah="${langkah_tambah}  • docker/nginx/conf.d/${name}.conf\n"; perlu_generate=true; }
+
+    if [ "$perlu_generate" = false ]; then
+        return 0    # semua sudah ada
+    fi
+
+    echo ""
+    log_warn "App '${name}' belum memiliki file infrastruktur lengkap."
+    echo ""
+    echo "  File yang akan dibuat:"
+    echo -e "$langkah_tambah"
+    echo ""
+    echo "  G) Generate — buat file-file yang kurang"
+    echo "  S) Skip — lewati, nanti urus manual"
+    echo ""
+    local action
+    while true; do
+        read -rp "  Pilihan [G/s]: " action </dev/tty
+        action="${action:-G}"
+        case "${action^^}" in
+            G) break ;;
+            S) echo -e "  ${BLUE}ℹ️  Skip generate infrastruktur.${NC}"; return 0 ;;
+            *) echo -e "  ${RED}❌ Pilihan tidak valid.${NC}" ;;
+        esac
+    done
+
+    # ── Auto-detect port ──
+    local default_port=8300
+    if [ -f "${PROJECT_DIR}/compose/base/web.yml" ]; then
+        local found_ports
+        found_ports=$(grep -oP '\${\w+_HOST_PORT:-\K[0-9]+' "${PROJECT_DIR}/compose/base/web.yml" 2>/dev/null || echo "")
+        for p in $found_ports; do
+            [ "$p" -gt "$default_port" ] && default_port="$p"
+        done
+    fi
+    default_port=$((default_port + 10))
+
+    local database="${name}_db"
+    local db_user="${name}_user"
+    local db_password="${name}_pass123"
+    local port="${default_port}"
+    local has_queue="true"
+    local has_scheduler="true"
+    local image="juniyasyos/${name}"
+    local version="v1.0.0"
+
+    # Source scaffold if needed
+    if ! declare -F gen_compose_app >/dev/null; then
+        source "${PROJECT_DIR}/scripts/scaffold.sh"
+    fi
+
+    log_header "📦 Generate infrastruktur untuk ${name}"
+
+    # 1. app.yml
+    if [ ! -f "${apps_dir}/app.yml" ]; then
+        mkdir -p "${apps_dir}"
+        cat > "${apps_dir}/app.yml" << APPYML
+# ${desc}
+name: ${name}
+repo: ${REPO_URL}
+branch: ${BRANCH}
+source_dir: ${source_dir}
+image: ${image}
+version: ${version}
+port: ${port}
+domain: ${name}.local
+database: ${database}
+db_user: ${db_user}
+db_password: ${db_password}
+queue: ${has_queue}
+scheduler: ${has_scheduler}
+php_version: "8.4"
+has_prod_env: ${HAS_PROD_ENV:-yes}
+has_local_deps: ${HAS_LOCAL_DEPS:-no}
+description: ${desc}
+APPYML
+        log_success "Created apps/${name}/app.yml"
+    else
+        log_success "apps/${name}/app.yml already exists"
+    fi
+
+    # 2. Dockerfile
+    if [ ! -f "${apps_dir}/Dockerfile" ]; then
+        gen_dockerfile "$name" "$source_dir" "$desc"
+    else
+        log_success "apps/${name}/Dockerfile already exists"
+    fi
+
+    # 3. .env.example
+    if [ ! -f "${apps_dir}/.env.example" ]; then
+        gen_env_example "$name" "$port" "$db_user" "$db_password" "$database"
+    else
+        log_success "apps/${name}/.env.example already exists"
+    fi
+
+    # 4. compose/apps/<name>.yml
+    if [ ! -f "${PROJECT_DIR}/compose/apps/${name}.yml" ]; then
+        gen_compose_app "$name" "$source_dir" "$image" "$version" "$port" \
+            "$database" "$db_user" "$db_password" "$desc" \
+            "$has_queue" "$has_scheduler"
+    else
+        log_success "compose/apps/${name}.yml already exists"
+    fi
+
+    # 5. compose.yml — cek apakah service sudah terdaftar
+    if ! grep -q "^  app-${name}:" "${PROJECT_DIR}/compose.yml" 2>/dev/null; then
+        log_info "  Inserting into compose.yml..."
+        py_insert_compose_yml "$name" "$source_dir" "$has_queue" "$has_scheduler" "$desc" || true
+        log_success "  compose.yml updated"
+    else
+        log_success "compose.yml — ${name} already registered"
+    fi
+
+    # 6. compose/base/web.yml — port + volume
+    local name_upper
+    name_upper=$(echo "$name" | tr '[:lower:]' '[:upper:]')
+    if ! grep -q "${name_upper}_HOST_PORT" "${PROJECT_DIR}/compose/base/web.yml" 2>/dev/null; then
+        log_info "  Inserting into compose/base/web.yml..."
+        py_insert_web_yml "$name" "$source_dir" "$port" || true
+        log_success "  compose/base/web.yml updated"
+    else
+        log_success "compose/base/web.yml — ${name} already registered"
+    fi
+
+    # 7. compose/build.yml
+    if ! grep -q "^  ${name}:" "${PROJECT_DIR}/compose/build.yml" 2>/dev/null; then
+        log_info "  Inserting into compose/build.yml..."
+        py_insert_build_yml "$name" "$source_dir" "$db_user" "$db_password" "$database" "$desc" || true
+        log_success "  compose/build.yml updated"
+    else
+        log_success "compose/build.yml — ${name} already registered"
+    fi
+
+    # 8. Nginx config
+    if [ ! -f "${PROJECT_DIR}/docker/nginx/conf.d/${name}.conf" ]; then
+        append_nginx_conf "$name" "$source_dir" "$port" "$desc"
+        log_success "  docker/nginx/conf.d/${name}.conf created"
+    fi
+
+    # 9. SQL init
+    local sql_file="${PROJECT_DIR}/docker/db/sql/00-init-multi-db.sql"
+    if [ -f "$sql_file" ]; then
+        if ! grep -q "CREATE DATABASE IF NOT EXISTS ${database}" "$sql_file" 2>/dev/null; then
+            log_info "  Appending to docker/db/sql/00-init-multi-db.sql..."
+            append_sql_init "$name" "$database" "$db_user" "$db_password"
+            log_success "  SQL init appended"
+        else
+            log_success "SQL init — ${database} already registered"
+        fi
+    fi
+
+    # 10. env files
+    if ! grep -q "${name_upper}_HOST_PORT" "${PROJECT_DIR}/env/dev.env" 2>/dev/null; then
+        log_info "  Appending to env files..."
+        append_env_files "$name" "$port" || true
+        log_success "  env files updated"
+    else
+        log_success "env files — ${name} already registered"
+    fi
+
+    echo ""
+    log_success "✅ Infrastruktur untuk ${name} sudah siap!"
+}
+
+# ============================================
 # Prepare Single App
 # ============================================
 
@@ -519,6 +701,9 @@ prepare_app() {
     printf "  │  Branch : %-47s│\n" "${BRANCH}"
     printf "  │  Target : %-47s│\n" "site/${APP_DIR}"
     echo "  └─────────────────────────────────────────────────────────┘"
+
+    # ── Auto-generate infrastruktur yang kurang ────────────────────────────────
+    ensure_app_infrastructure
 
     # ── Pilih mode interaktif ─────────────────────────────────────────────────
     local PREPARE_MODE=""

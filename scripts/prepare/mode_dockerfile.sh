@@ -264,6 +264,17 @@ else
     [ ! -f ".env" ] && [ -f ".env.example" ] && cp .env.example .env
 fi
 
+# Helper untuk menjalankan command sebagai www user
+run_as_www() {
+    if command -v su-exec >/dev/null 2>&1; then
+        su-exec www "$@"
+    elif [ "$(id -u)" = "0" ]; then
+        su -s /bin/sh www -c "$(printf '%s ' "$@")"
+    else
+        "$@"
+    fi
+}
+
 # Wait for DB
 echo "⏳ Waiting for database..."
 php -r '
@@ -279,28 +290,49 @@ while (true) {
 }
 '
 
-# Warm up caches
+# Fix permissions BEFORE cache warming
+echo "🔧 Setting up permissions..."
+mkdir -p storage/framework/cache/data \
+         storage/framework/sessions \
+         storage/framework/views \
+         storage/framework/testing \
+         storage/logs \
+         storage/app/public \
+         bootstrap/cache
+touch storage/logs/laravel.log
+
+# Hapus stale cache files untuk mencegah error filemtime()
+echo "🧹 Cleaning stale cache files..."
+rm -rf storage/framework/views/* 2>/dev/null || true
+rm -rf storage/framework/cache/data/* 2>/dev/null || true
+rm -f bootstrap/cache/*.php 2>/dev/null || true
+
+# Set ownership dan permission SEBELUM menjalankan artisan
+chown -R www:www storage bootstrap/cache 2>/dev/null || true
+chmod -R ug+rwX storage bootstrap/cache 2>/dev/null || true
+chmod 664 storage/logs/laravel.log 2>/dev/null || true
+
+echo "✅ Permissions set"
+
+# Warm up caches — dijalankan sebagai www user untuk mencegah file ownership mismatch
 echo "⚙️  Warming up caches..."
-php artisan config:cache  >/dev/null 2>&1 || echo "⚠️ config:cache failed"
-php artisan route:cache   >/dev/null 2>&1 || echo "⚠️ route:cache failed"
-php artisan view:cache    >/dev/null 2>&1 || echo "⚠️ view:cache failed"
-php artisan event:cache   >/dev/null 2>&1 || echo "⚠️ event:cache failed"
+run_as_www php artisan config:cache  >/dev/null 2>&1 || echo "⚠️ config:cache failed"
+# Skip route:cache untuk Livewire compatibility
+echo "ℹ️ Skipping route:cache (Livewire compatibility)"
+# Skip view:cache untuk mencegah error filemtime() pada storage volume
+echo "ℹ️ Skipping view:cache (mencegah error filemtime pada runtime storage)"
+run_as_www php artisan event:cache   >/dev/null 2>&1 || echo "⚠️ event:cache failed"
 
-# Livewire assets
+# Livewire assets (sebagai www user)
 if [ ! -d "public/vendor/livewire" ]; then
-    php artisan livewire:publish --assets || echo "⚠️ livewire:publish failed"
+    run_as_www php artisan livewire:publish --assets || echo "⚠️ livewire:publish failed"
 fi
-
-# Fix permissions
-[ -d storage ] && chown -R www:www storage bootstrap/cache 2>/dev/null || true
-[ -d storage ] && chmod -R ug+rwX storage bootstrap/cache 2>/dev/null || true
 
 echo "✅ Container ready at: $(date)"
 
 [ $# -eq 0 ] && set -- php-fpm -F
 echo "🚀 Starting: $*"
 exec "$@"
-ENTRYPOINT
         chmod +x "${entrypoint_file}"
         log_success "entrypoint.sh berhasil dibuat: apps/${APP_NAME}/entrypoint.sh"
     else

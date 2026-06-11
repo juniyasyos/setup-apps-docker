@@ -10,12 +10,15 @@ x-apps: &apps
   siimut: { port: 8000 }
   ikp:    { port: 8200 }
   iam:    { port: 8100 }
+  lms:    { port: 7000 }
+  rbv:    { port: 7300 }
 
 x-web-ports: &web-ports
   - "${WEB_PORTAL_PORT:-1000}:1000"
   - "${SIIMUT_HOST_PORT:-8000}:8000"
   - "${IKP_HOST_PORT:-8200}:8200"
-  - "${LMS_HOST_PORT:-8080}:8080"
+  - "${LMS_HOST_PORT:-7000}:7000"
+  - "${RBV_HOST_PORT:-7300}:7300"
   - "${IAM_HOST_PORT:-8100}:8100"
 
 x-web-volumes: &web-volumes
@@ -30,6 +33,8 @@ x-web-volumes: &web-volumes
   - iam_public:/var/www/iam/public:ro
   - lms_public:/var/www/lms-app/public:ro
   - lms_storage:/var/www/lms-app/storage:ro
+  - rbv_public:/var/www/rbv/public:ro
+  - rbv_storage:/var/www/rbv/storage:ro
   - nginx_logs:/var/log/nginx
 
 services:
@@ -68,6 +73,10 @@ volumes:
   lms_public:
     driver: local
   lms_storage:
+    driver: local
+  rbv_public:
+    driver: local
+  rbv_storage:
     driver: local
   nginx_logs:
     driver: local

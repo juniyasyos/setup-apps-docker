@@ -1,0 +1,18 @@
+# RBV — Ruang Baca Virtual Platform
+name: rbv
+repo: https://github.com/kiflinnadil/new-RBV.git
+branch: main
+source_dir: rbv-app
+image: rbv
+version: v1.0.0
+port: 7300
+domain: 
+database: rbv_db
+db_user: rbv_user
+db_password: rbv_pass123
+queue: true
+scheduler: true
+php_version: "8.4"
+has_prod_env: true
+has_local_deps: false
+description: RBV - Ruang Baca Virtual

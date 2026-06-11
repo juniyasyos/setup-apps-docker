@@ -75,6 +75,23 @@ services:
       file: compose/apps/lms.yml
       service: scheduler
 
+  #  RBV - Ruang Baca Virtual Platform
+  # Image: juniyasyos/rbv:VERSION
+  app-rbv:
+    extends:
+      file: compose/apps/rbv.yml
+      service: app
+
+  queue-rbv:
+    extends:
+      file: compose/apps/rbv.yml
+      service: queue
+
+  scheduler-rbv:
+    extends:
+      file: compose/apps/rbv.yml
+      service: scheduler
+
 ####################################################################################################
 # Named Volumes
 # Volume naming convention:
@@ -112,6 +129,14 @@ volumes:
   lms_storage:
     driver: local
   lms_bootstrap_cache:
+    driver: local
+
+  # ── RBV ──────────────────────────────────────────
+  rbv_public:
+    driver: local
+  rbv_storage:
+    driver: local
+  rbv_bootstrap_cache:
     driver: local
 
 

@@ -70,6 +70,10 @@ services:
           echo "🔓 Mengatur policy PUBLIC (download) untuk bucket..."
           mc anonymous set download myminio/$${bucket}
           echo "✅ Bucket '$${bucket}' dapat diakses publik"
+
+          echo "📊 Mengatur quota bucket '$${bucket}' menjadi ${MINIO_BUCKET_QUOTA:-1GB}..."
+          mc admin bucket quota myminio/$${bucket} --hard "${MINIO_BUCKET_QUOTA:-1GB}"
+          echo "✅ Quota bucket '$${bucket}' ditetapkan"
         done
         set +f
         IFS="$$OLD_IFS"
