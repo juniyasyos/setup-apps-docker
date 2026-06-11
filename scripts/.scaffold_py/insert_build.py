@@ -21,7 +21,7 @@ build_block = f"""
   ####################################################################################################
   {name}:
     build:
-      context: .
+      context: ..
       dockerfile: apps/{name}/Dockerfile
       args:
         UID: "1000"
