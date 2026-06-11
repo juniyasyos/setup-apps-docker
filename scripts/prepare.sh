@@ -515,6 +515,48 @@ ensure_app_infrastructure() {
     done
 
     # ── Generate missing files via scaffold.sh (subprocess to avoid function/var conflicts) ──
+    local app_yml="${PROJECT_DIR}/apps/${name}/app.yml"
+    if [ ! -f "$app_yml" ]; then
+        log_info "Generating apps/${name}/app.yml from repos.csv details..."
+        mkdir -p "$(dirname "$app_yml")"
+        
+        # Check if scaffold.sh needs variables exported to render app.yml
+        # Let's detect port
+        local default_port
+        if [ -f "${PROJECT_DIR}/scripts/scaffold.sh" ]; then
+            default_port=$(bash -c "source ${PROJECT_DIR}/scripts/scaffold.sh && detect_next_port" 2>/dev/null || echo "8080")
+        else
+            default_port="8080"
+        fi
+
+        local prod_flag="no"
+        local deps_flag="no"
+        [ "$HAS_PROD_ENV" = "true" ] && prod_flag="yes"
+        [ "$HAS_LOCAL_DEPS" = "true" ] && deps_flag="yes"
+
+        export \
+            APP_NAME="$name" \
+            APP_DESC="${APP_DESC:-$name}" \
+            APP_REPO="$REPO_URL" \
+            APP_BRANCH="$BRANCH" \
+            SOURCE_DIR="$source_dir" \
+            IMAGE_NAME="$name" \
+            IMAGE_VERSION="v1.0.0" \
+            APP_PORT="$default_port" \
+            APP_DOMAIN="${name}.local" \
+            DB_NAME="${name}_db" \
+            DB_USER="${name}_user" \
+            DB_PASSWORD="${name}_password" \
+            HAS_QUEUE="true" \
+            HAS_SCHEDULER="true" \
+            HAS_PROD_ENV="$prod_flag" \
+            HAS_LOCAL_DEPS="$deps_flag" \
+            PHP_VERSION="8.4"
+
+        bash -c "source ${PROJECT_DIR}/scripts/scaffold.sh && render_template \"\${TEMPLATE_DIR}/app-yml.tpl\" \"$app_yml\""
+        log_success "Created apps/${name}/app.yml"
+    fi
+
     "${PROJECT_DIR}/scripts/scaffold.sh" render "$name"
 
     echo ""
