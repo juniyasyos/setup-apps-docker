@@ -486,7 +486,7 @@ services:
       APP_DEBUG: "true"
       APP_WORKDIR: /var/www/${source_dir}
       PUBLIC_VOLUME: /var/www/${source_dir}/public
-      APP_URL: "http://192.168.1.4:${port}"
+      APP_URL: "${HOST_IP}:${port}"
       TRUSTED_PROXIES: "*"
       DB_HOST: database-service
       DB_USERNAME: ${db_user}
@@ -496,7 +496,7 @@ services:
       AWS_ACCESS_KEY_ID: admin
       AWS_SECRET_ACCESS_KEY: password
       AWS_BUCKET: ${name}
-      AWS_URL: http://192.168.1.4:9090/${name}
+      AWS_URL: ${HOST_IP}:9090/${name}
       AWS_ENDPOINT: http://minio:9090
     volumes:
       - ${name}_storage:/var/www/${source_dir}/storage
@@ -628,7 +628,7 @@ APP_NAME="${name}"
 APP_ENV=production
 APP_KEY=
 APP_DEBUG=false
-APP_URL=http://192.168.1.4:${port}
+APP_URL=${HOST_IP}:${port}
 
 # Database
 DB_CONNECTION=mysql
@@ -665,7 +665,7 @@ AWS_SECRET_ACCESS_KEY=password
 AWS_DEFAULT_REGION=us-east-1
 AWS_BUCKET=${name}
 AWS_ENDPOINT=http://minio:9090
-AWS_URL=http://192.168.1.4:9090/${name}
+AWS_URL=${HOST_IP}:9090/${name}
 AWS_USE_PATH_STYLE_ENDPOINT=true
 
 # Logging
