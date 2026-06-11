@@ -3,7 +3,7 @@
   ####################################################################################################
   {{APP_NAME}}:
     build:
-      context: .
+      context: ..
       dockerfile: apps/{{APP_NAME}}/Dockerfile
       args:
         UID: "1000"

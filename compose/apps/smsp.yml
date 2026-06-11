@@ -1,0 +1,119 @@
+# Smartpresence Deskripsi
+name: service-smsp
+
+services:
+  app:
+    extends:
+      file: ../base/php-base.yml
+      service: php-app-base
+    image: smsp:v1.0.0
+    container_name: smsp-app
+    working_dir: /var/www/smsp
+    env_file:
+      - ../../apps/smsp/.env.example
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "true"
+      APP_WORKDIR: /var/www/smsp
+      PUBLIC_VOLUME: /var/www/smsp/public
+      APP_URL: "${HOST_IP:-http://localhost}:7200"
+      TRUSTED_PROXIES: "*"
+
+      DB_HOST: database-service
+      DB_USERNAME: smsp_user
+      DB_PASSWORD: smsp_password
+      DB_DATABASE: smsp_db
+
+      # Jangan true kalau public volume masih perlu diisi ke shared volume Nginx.
+      SKIP_PUBLIC_SYNC: "false"
+
+      AWS_ACCESS_KEY_ID: admin
+      AWS_SECRET_ACCESS_KEY: password
+      AWS_BUCKET: smsp
+      AWS_URL: ${HOST_IP:-http://localhost}:9090/smsp
+      AWS_ENDPOINT: http://minio:9090
+    volumes:
+      - smsp_storage:/var/www/smsp/storage
+      - smsp_bootstrap_cache:/var/www/smsp/bootstrap/cache
+      - smsp_public:/var/www/smsp/public
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1"
+        reservations:
+          memory: 512M
+          cpus: "0.5"
+
+  queue:
+    extends:
+      file: ../base/php-base.yml
+      service: php-worker-base
+    image: smsp:v1.0.0
+    container_name: smsp-queue
+    working_dir: /var/www/smsp
+    env_file:
+      - ../../apps/smsp/.env.example
+    environment:
+      DB_HOST: database-service
+      DB_USERNAME: smsp_user
+      DB_PASSWORD: smsp_password
+      DB_DATABASE: smsp_db
+    volumes:
+      - smsp_storage:/var/www/smsp/storage
+      - smsp_bootstrap_cache:/var/www/smsp/bootstrap/cache
+    command: >
+      artisan queue:work
+        --sleep=5
+        --tries=3
+        --timeout=120
+        --max-jobs=500
+        --max-time=3600
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+          cpus: "0.5"
+        reservations:
+          memory: 128M
+          cpus: "0.25"
+
+  scheduler:
+    extends:
+      file: ../base/php-base.yml
+      service: php-scheduler-base
+    image: smsp:v1.0.0
+    container_name: smsp-scheduler
+    working_dir: /var/www/smsp
+    env_file:
+      - ../../apps/smsp/.env.example
+    environment:
+      DB_HOST: database-service
+      DB_USERNAME: smsp_user
+      DB_PASSWORD: smsp_password
+      DB_DATABASE: smsp_db
+    volumes:
+      - smsp_storage:/var/www/smsp/storage
+      - smsp_bootstrap_cache:/var/www/smsp/bootstrap/cache
+    command: >
+      artisan schedule:work
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.2"
+        reservations:
+          memory: 64M
+          cpus: "0.1"
+
+volumes:
+  smsp_public:
+    external: true
+    name: base_smsp_public
+
+  smsp_storage:
+    external: true
+    name: base_smsp_storage
+
+  smsp_bootstrap_cache:
+    name: base_smsp_bootstrap_cache

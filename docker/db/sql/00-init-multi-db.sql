@@ -96,7 +96,6 @@ GRANT SELECT ON db_lms_citrahusada.* TO 'lms_readonly'@'%';
 -- =================================================
 --  Finalize Privileges
 -- =================================================
-FLUSH PRIVILEGES;
 
 -- =================================================
 
@@ -136,3 +135,27 @@ CREATE USER IF NOT EXISTS 'rbv_user_readonly'@'%'
   IDENTIFIED BY 'rbv@ReadOnly2025!';
 
 GRANT SELECT ON rbv_db.* TO 'rbv_user_readonly'@'%';
+
+-- =================================================
+-- smsp_db Database
+-- App: smsp
+-- =================================================
+CREATE DATABASE IF NOT EXISTS smsp_db
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+
+CREATE USER IF NOT EXISTS 'smsp_user'@'%'
+  IDENTIFIED BY 'smsp_password';
+
+GRANT ALL PRIVILEGES
+  ON smsp_db.* TO 'smsp_user'@'%';
+
+CREATE USER IF NOT EXISTS 'smsp_user_readonly'@'%'
+  IDENTIFIED BY 'smsp@ReadOnly2025!';
+
+GRANT SELECT
+  ON smsp_db.* TO 'smsp_user_readonly'@'%';
+
+
+
+FLUSH PRIVILEGES;

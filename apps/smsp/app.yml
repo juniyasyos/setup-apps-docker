@@ -1,0 +1,18 @@
+#  Smartpresence Deskripsi 
+name: smsp
+repo: https://github.com/Iannn-vbeta/be-laravel-smartpresence
+branch:  main
+source_dir: smsp
+image: smsp
+version: v1.0.0
+port: 7200
+domain: smsp.local
+database: smsp_db
+db_user: smsp_user
+db_password: smsp_password
+queue: true
+scheduler: true
+php_version: "8.4"
+has_prod_env: no
+has_local_deps: no
+description:  Smartpresence Deskripsi 

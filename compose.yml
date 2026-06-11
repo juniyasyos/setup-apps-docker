@@ -93,6 +93,39 @@ services:
       service: scheduler
 
 ####################################################################################################
+  # Smartpresence Deskripsi
+  # Image: smsp:v1.0.0
+  app-smsp:
+    extends:
+      file: compose/apps/smsp.yml
+      service: app
+  # ── SMSP ──────────────────────────────────────────
+  smsp_public:
+    external: true
+    name: base_smsp_public
+
+  smsp_storage:
+    external: true
+    name: base_smsp_storage
+
+  smsp_bootstrap_cache:
+    name: base_smsp_bootstrap_cache
+    networks:
+      - default
+
+  queue-smsp:
+    extends:
+      file: compose/apps/smsp.yml
+      service: queue
+    networks:
+      - default
+
+  scheduler-smsp:
+    extends:
+      file: compose/apps/smsp.yml
+      service: scheduler
+    networks:
+      - default
 # Named Volumes
 # Volume naming convention:
 #   {app}_{type}  →  e.g. siimut_storage, ikp_public

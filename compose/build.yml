@@ -137,3 +137,34 @@ services:
     image: rbv:${RBV_VERSION:-latest}
     pull_policy: never
 
+
+  ####################################################################################################
+  # Smartpresence Deskripsi
+  ####################################################################################################
+  smsp:
+    build:
+      context: ..
+      dockerfile: apps/smsp/Dockerfile
+      args:
+        UID: "1000"
+        GID: "1000"
+        TZ: "Asia/Jakarta"
+
+        APP_NAME: "Smartpresence Deskripsi"
+        APP_ENV: "production"
+        APP_DIR: "smsp"
+
+        DB_HOST: "database-service"
+        DB_USERNAME: "smsp_user"
+        DB_PASSWORD: "smsp_password"
+        DB_DATABASE: "smsp_db"
+
+        AWS_ACCESS_KEY_ID: "admin"
+        AWS_SECRET_ACCESS_KEY: "password"
+        AWS_BUCKET: "smsp"
+        AWS_URL: "http://minio:9090/smsp"
+        AWS_ENDPOINT: "http://minio:9090"
+
+        BUILD_TIMESTAMP: "${BUILD_TIMESTAMP:-manual}"
+    image: smsp:${SMSP_VERSION:-v1.0.0}
+    pull_policy: never
