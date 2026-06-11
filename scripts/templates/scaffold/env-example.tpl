@@ -5,7 +5,7 @@
 
 APP_NAME="{{APP_NAME}}"
 APP_ENV=production
-APP_KEY=
+# APP_KEY=
 APP_DEBUG=false
 APP_URL=${HOST_IP:-http://localhost}:{{APP_PORT}}
 

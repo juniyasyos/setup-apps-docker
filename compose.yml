@@ -99,19 +99,6 @@ services:
     extends:
       file: compose/apps/smsp.yml
       service: app
-  # ── SMSP ──────────────────────────────────────────
-  smsp_public:
-    external: true
-    name: base_smsp_public
-
-  smsp_storage:
-    external: true
-    name: base_smsp_storage
-
-  smsp_bootstrap_cache:
-    name: base_smsp_bootstrap_cache
-    networks:
-      - default
 
   queue-smsp:
     extends:
@@ -172,6 +159,13 @@ volumes:
   rbv_bootstrap_cache:
     driver: local
 
+  # ── RBV ──────────────────────────────────────────
+  smsp_public:
+    driver: local
+  smsp_storage:
+    driver: local
+  smsp_bootstrap_cache:
+    driver: local
 
 ####################################################################################################
 # Networks - Using shared infrastructure network

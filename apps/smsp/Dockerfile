@@ -88,8 +88,9 @@ COPY site/${APP_DIR}/ ./
 # Finalize: dump autoloader and optimize
 RUN set -eux; \
     composer dump-autoload --optimize --classmap-authoritative --no-scripts 2>/dev/null || true; \
-    if [ -f .env ]; then \
-      php artisan optimize 2>/dev/null || true; \
+    # Clear any potential config caches created during composer commands
+    if [ -f artisan ]; then \
+      php artisan config:clear 2>/dev/null || true; \
     fi; \
     if [ -d vendor/livewire ]; then \
       echo "✅ Livewire verified"; \
@@ -108,7 +109,7 @@ ARG TZ=Asia/Jakarta
 ARG APP_NAME="Smartpresence Deskripsi"
 
 ENV APP_ENV=production \
-    APP_WORKDIR=/var/www/ \
+    APP_WORKDIR=/var/www/smsp/ \
     PHP_OPCACHE_VALIDATE_TIMESTAMPS=0 \
     PHP_MEMORY_LIMIT=512M \
     APP_NAME=${APP_NAME}

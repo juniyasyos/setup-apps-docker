@@ -98,10 +98,18 @@ if [ ! -f ".env" ]; then
     fi
 fi
 
-# Ensure APP_KEY is set (generate if missing/empty)
-APP_KEY_VALUE=$(grep -E '^APP_KEY=' .env | head -1 | cut -d'=' -f2- || true)
-if [ -z "${APP_KEY_VALUE}" ]; then
+# Unset APP_KEY from OS environment if it's empty so Laravel reads from .env instead
+if [ -z "$APP_KEY" ]; then
+    unset APP_KEY
+fi
+
+# Ensure APP_KEY is set (generate if missing, empty, or just "base64:")
+APP_KEY_VALUE=$(grep -E '^APP_KEY=' .env | head -1 | cut -d'=' -f2- | tr -d '\r' || true)
+if [ -z "${APP_KEY_VALUE}" ] || [ "${APP_KEY_VALUE}" = "base64:" ] || [ "${#APP_KEY_VALUE}" -le 10 ]; then
     echo "🔐 Generating APP_KEY..."
+    rm -f bootstrap/cache/config.php 2>/dev/null || true
+    # Unset APP_KEY from OS environment if it's empty so artisan reads from .env instead of docker env
+    unset APP_KEY
     php artisan key:generate --force
 fi
 
@@ -182,76 +190,80 @@ echo "🧹 Clearing stale bootstrap cache files..."
 rm -f bootstrap/cache/services.php bootstrap/cache/packages.php bootstrap/cache/config.php bootstrap/cache/routes-v7.php bootstrap/cache/events.php bootstrap/cache/modules.php bootstrap/cache/settings.php 2>/dev/null || true
 
 # Publish and verify Livewire assets (CRITICAL - do this BEFORE symlink)
-echo "📦 Ensuring Livewire assets are published..."
+if [ -d vendor/livewire/livewire ]; then
+  echo "📦 Ensuring Livewire assets are published..."
 
-LIVEWIRE_MAX_RETRIES=3
-LIVEWIRE_RETRY_COUNT=0
-LIVEWIRE_PUBLISHED=0
+  LIVEWIRE_MAX_RETRIES=3
+  LIVEWIRE_RETRY_COUNT=0
+  LIVEWIRE_PUBLISHED=0
 
-while [ $LIVEWIRE_RETRY_COUNT -lt $LIVEWIRE_MAX_RETRIES ] && [ $LIVEWIRE_PUBLISHED -eq 0 ]; do
-  LIVEWIRE_RETRY_COUNT=$((LIVEWIRE_RETRY_COUNT + 1))
-  
-  # Check if assets already exist
-  if [ -d public/vendor/livewire ] && [ -f public/vendor/livewire/livewire.min.js ]; then
-    echo "✅ Livewire assets already present"
-    LIVEWIRE_PUBLISHED=1
-    break
-  fi
-  
-  # Attempt to publish
-  echo "  🔄 Attempt $LIVEWIRE_RETRY_COUNT/$LIVEWIRE_MAX_RETRIES: Running livewire:publish..."
-  if run_as_www php artisan livewire:publish --assets 2>&1 | tee /tmp/livewire-publish.log; then
-    echo "  ✓ Publish command succeeded"
-  else
-    echo "  ⚠️ Publish command had exit code > 0"
-  fi
-  
-  # Verify assets exist after publish attempt
-  if [ -d public/vendor/livewire ] && [ -f public/vendor/livewire/livewire.min.js ]; then
-    echo "  ✅ Livewire assets verified at public/vendor/livewire/"
-    LIVEWIRE_PUBLISHED=1
-    break
-  elif [ -d public/vendor/livewire ]; then
-    echo "  ⚠️ Directory exists but livewire.min.js missing. Contents:"
-    ls -la public/vendor/livewire/ | head -5
-  else
-    echo "  ❌ public/vendor/livewire directory not found"
+  while [ $LIVEWIRE_RETRY_COUNT -lt $LIVEWIRE_MAX_RETRIES ] && [ $LIVEWIRE_PUBLISHED -eq 0 ]; do
+    LIVEWIRE_RETRY_COUNT=$((LIVEWIRE_RETRY_COUNT + 1))
     
-    # Debug: show what's in public/vendor/
-    if [ -d public/vendor ]; then
-      echo "  📋 Available in public/vendor: $(ls -1 public/vendor/ 2>/dev/null | tr '\n' ' ')"
+    # Check if assets already exist
+    if [ -d public/vendor/livewire ] && [ -f public/vendor/livewire/livewire.min.js ]; then
+      echo "✅ Livewire assets already present"
+      LIVEWIRE_PUBLISHED=1
+      break
+    fi
+    
+    # Attempt to publish
+    echo "  🔄 Attempt $LIVEWIRE_RETRY_COUNT/$LIVEWIRE_MAX_RETRIES: Running livewire:publish..."
+    if run_as_www php artisan livewire:publish --assets 2>&1 | tee /tmp/livewire-publish.log; then
+      echo "  ✓ Publish command succeeded"
     else
-      echo "  📋 public/vendor directory does not exist"
+      echo "  ⚠️ Publish command had exit code > 0"
     fi
     
-    # Try alternative method
-    if [ $LIVEWIRE_RETRY_COUNT -eq 1 ] && [ -f vendor/bin/livewire ]; then
-      echo "  🔄 Trying vendor/bin/livewire (alternative)..."
-      run_as_www vendor/bin/livewire publish --assets 2>&1 || echo "  ⚠️ Alternative method also failed"
+    # Verify assets exist after publish attempt
+    if [ -d public/vendor/livewire ] && [ -f public/vendor/livewire/livewire.min.js ]; then
+      echo "  ✅ Livewire assets verified at public/vendor/livewire/"
+      LIVEWIRE_PUBLISHED=1
+      break
+    elif [ -d public/vendor/livewire ]; then
+      echo "  ⚠️ Directory exists but livewire.min.js missing. Contents:"
+      ls -la public/vendor/livewire/ | head -5
+    else
+      echo "  ❌ public/vendor/livewire directory not found"
+      
+      # Debug: show what's in public/vendor/
+      if [ -d public/vendor ]; then
+        echo "  📋 Available in public/vendor: $(ls -1 public/vendor/ 2>/dev/null | tr '\n' ' ')"
+      else
+        echo "  📋 public/vendor directory does not exist"
+      fi
+      
+      # Try alternative method
+      if [ $LIVEWIRE_RETRY_COUNT -eq 1 ] && [ -f vendor/bin/livewire ]; then
+        echo "  🔄 Trying vendor/bin/livewire (alternative)..."
+        run_as_www vendor/bin/livewire publish --assets 2>&1 || echo "  ⚠️ Alternative method also failed"
+      fi
     fi
-  fi
-  
-  # Wait before retry
-  if [ $LIVEWIRE_RETRY_COUNT -lt $LIVEWIRE_MAX_RETRIES ] && [ $LIVEWIRE_PUBLISHED -eq 0 ]; then
-    echo "  ⏳ Waiting 2 seconds before retry..."
-    sleep 2
-  fi
-done
+    
+    # Wait before retry
+    if [ $LIVEWIRE_RETRY_COUNT -lt $LIVEWIRE_MAX_RETRIES ] && [ $LIVEWIRE_PUBLISHED -eq 0 ]; then
+      echo "  ⏳ Waiting 2 seconds before retry..."
+      sleep 2
+    fi
+  done
 
-# Create symlink (only if assets are actually present)
-if [ -d public/vendor/livewire ]; then
-  if [ ! -L public/livewire ]; then
-    rm -f public/livewire  # Remove if it's a regular directory
-    ln -s vendor/livewire public/livewire
-    echo "✅ Created symlink: public/livewire -> vendor/livewire"
+  # Create symlink (only if assets are actually present)
+  if [ -d public/vendor/livewire ]; then
+    if [ ! -L public/livewire ]; then
+      rm -f public/livewire  # Remove if it's a regular directory
+      ln -s vendor/livewire public/livewire
+      echo "✅ Created symlink: public/livewire -> vendor/livewire"
+    else
+      echo "✅ Symlink public/livewire -> vendor/livewire already exists"
+    fi
   else
-    echo "✅ Symlink public/livewire -> vendor/livewire already exists"
+    echo "❌ CRITICAL: Livewire assets could not be published after $LIVEWIRE_MAX_RETRIES attempts!"
+    echo "📋 Check /tmp/livewire-publish.log for details"
+    echo "This will cause Livewire 404 errors in the application!"
+    # Don't exit - let app start anyway, but log the issue
   fi
 else
-  echo "❌ CRITICAL: Livewire assets could not be published after $LIVEWIRE_MAX_RETRIES attempts!"
-  echo "📋 Check /tmp/livewire-publish.log for details"
-  echo "This will cause Livewire 404 errors in the application!"
-  # Don't exit - let app start anyway, but log the issue
+  echo "ℹ️ Livewire is not installed, skipping asset publication"
 fi
   
   # Clear stale cache files yang mungkin corrupt atau orphaned
@@ -333,7 +345,7 @@ echo "🔐 Minio console is usually at port 9091 (not used by app)"
 # attempt simple connectivity test (requires curl in image)
 echo "🔗 Testing connectivity to Minio..."
 if command -v curl >/dev/null 2>&1; then
-    if curl -fsS --max-time 5 "${AWS_ENDPOINT:-}" >/dev/null 2>&1; then
+    if curl -sS --max-time 5 "${AWS_ENDPOINT:-}" >/dev/null 2>&1; then
         echo "✅ Able to reach Minio at ${AWS_ENDPOINT:-}"
     else
         echo "❌ Cannot reach Minio at ${AWS_ENDPOINT:-} (curl failed)"
@@ -342,6 +354,23 @@ else
     echo "⚠️  curl not available; skipping network check"
 fi
 
+# Verify APP_KEY is actually loaded by Laravel configuration (tinker check)
+echo "🔍 Verifying APP_KEY in Laravel configuration..."
+TINKER_KEY=$(php artisan tinker --execute="echo config('app.key');" 2>/dev/null | tr -d '\r' || true)
+if [ -n "$TINKER_KEY" ]; then
+    echo "✅ Laravel APP_KEY verified successfully: ${TINKER_KEY:0:15}..."
+else
+    echo "❌ CRITICAL: Laravel config('app.key') is EMPTY in config cache!"
+    echo "🧹 Attempting to clear config cache..."
+    php artisan config:clear || true
+    # Try one more check
+    TINKER_KEY_RETRY=$(php artisan tinker --execute="echo config('app.key');" 2>/dev/null | tr -d '\r' || true)
+    if [ -n "$TINKER_KEY_RETRY" ]; then
+        echo "✅ Fixed! Laravel APP_KEY verified after config clear: ${TINKER_KEY_RETRY:0:15}..."
+    else
+        echo "❌ CRITICAL ERROR: APP_KEY remains empty! Application will fail to decrypt sessions."
+    fi
+fi
 
 # Execute main command
 if [ $# -eq 0 ]; then
