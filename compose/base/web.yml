@@ -12,6 +12,7 @@ x-apps: &apps
   ikp:    { port: 8200 }
   lms:    { port: 7100 }
   smsp:   { port: 7200 }
+  fe_smsp:   { port: 7250 }
   rbv:    { port: 7300 }
 
 x-web-ports: &web-ports
@@ -21,6 +22,7 @@ x-web-ports: &web-ports
   - "${IKP_HOST_PORT:-8200}:8200"
   - "${LMS_HOST_PORT:-7100}:7100"
   - "${SMSP_HOST_PORT:-7200}:7200"
+  - "${FE_SMSP_HOST_PORT:-7250}:7250"
   - "${RBV_HOST_PORT:-7300}:7300"
 
 x-web-volumes: &web-volumes

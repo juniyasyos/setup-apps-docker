@@ -99,6 +99,11 @@ services:
     extends:
       file: compose/apps/smsp.yml
       service: app
+  
+  fe-smps:
+    extends:
+      file: compose/apps/fe-smsp.yml
+      service: fe
 
   queue-smsp:
     extends:

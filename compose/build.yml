@@ -168,3 +168,16 @@ services:
         BUILD_TIMESTAMP: "${BUILD_TIMESTAMP:-manual}"
     image: smsp:${SMSP_VERSION:-v1.0.0}
     pull_policy: never
+
+  # Frontend Compose
+  fe-smsp:
+    image: ${FE_SMSP_IMAGE:-fe-smsp:v1.0.0}
+    build:
+      context: ../site/fe-smsp
+      dockerfile: ../../apps/fe-smsp/Dockerfile
+      additional_contexts:
+        nginx_infra: ../docker/nginx
+      args:
+        APP_NAME: fe-smsp
+        VITE_APP_NAME: SMSP
+        VITE_API_BASE_URL: ${FE_SMSP_API_BASE_URL:-http://localhost:7250}

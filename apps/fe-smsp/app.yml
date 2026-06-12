@@ -1,0 +1,26 @@
+name: fe-smsp
+type: frontend-static
+framework: react-vite
+
+repo: https://github.com/Iannn-vbeta/fe-react-smartpresence.git
+branch: main
+
+image: fe-smsp:v1.0.0
+
+source_dir: site/fe-smsp
+dockerfile: apps/fe-smsp/Dockerfile
+
+port:
+  internal: 7250
+  host: 7250
+
+nginx:
+  enabled: true
+  listen_port: 7250
+  upstream_service: fe-smsp
+  upstream_port: 7250
+
+env:
+  NODE_ENV: production
+  VITE_APP_NAME: "SMSP"
+  VITE_API_BASE_URL: "http://localhost:7250"
