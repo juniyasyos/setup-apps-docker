@@ -16,7 +16,7 @@ services:
       APP_DEBUG: "true"
       APP_WORKDIR: /var/www/smsp
       PUBLIC_VOLUME: /var/www/smsp/public
-      APP_URL: "${HOST_IP:-http://localhost}:7200"
+      APP_URL: "http://${HOST_IP:-localhost}:7200"
       TRUSTED_PROXIES: "*"
 
       DB_HOST: database-service
@@ -30,7 +30,7 @@ services:
       AWS_ACCESS_KEY_ID: admin
       AWS_SECRET_ACCESS_KEY: password
       AWS_BUCKET: smsp
-      AWS_URL: ${HOST_IP:-http://localhost}:9090/smsp
+      AWS_URL: http://${HOST_IP:-localhost}:9090/smsp
       AWS_ENDPOINT: http://minio:9090
     volumes:
       - smsp_storage:/var/www/smsp/storage

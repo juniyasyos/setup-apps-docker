@@ -7,7 +7,7 @@ APP_NAME="{{APP_NAME}}"
 APP_ENV=production
 # APP_KEY=
 APP_DEBUG=false
-APP_URL=${HOST_IP:-http://localhost}:{{APP_PORT}}
+APP_URL=http://${HOST_IP:-localhost}:{{APP_PORT}}
 
 APP_WORKDIR=/var/www/{{SOURCE_DIR}}
 PUBLIC_VOLUME=/var/www/{{SOURCE_DIR}}/public
@@ -58,7 +58,7 @@ AWS_SECRET_ACCESS_KEY=password
 AWS_DEFAULT_REGION=us-east-1
 AWS_BUCKET={{APP_NAME}}
 AWS_ENDPOINT=http://minio:9090
-AWS_URL=${HOST_IP:-http://localhost}:9090/{{APP_NAME}}
+AWS_URL=http://${HOST_IP:-localhost}:9090/{{APP_NAME}}
 AWS_USE_PATH_STYLE_ENDPOINT=true
 
 # ===========================================

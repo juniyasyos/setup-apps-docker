@@ -16,7 +16,7 @@ services:
       APP_DEBUG: "true"
       APP_WORKDIR: /var/www/{{SOURCE_DIR}}
       PUBLIC_VOLUME: /var/www/{{SOURCE_DIR}}/public
-      APP_URL: "${HOST_IP:-http://localhost}:{{APP_PORT}}"
+      APP_URL: "http://${HOST_IP:-localhost}:{{APP_PORT}}"
       TRUSTED_PROXIES: "*"
 
       DB_HOST: database-service
@@ -30,7 +30,7 @@ services:
       AWS_ACCESS_KEY_ID: admin
       AWS_SECRET_ACCESS_KEY: password
       AWS_BUCKET: {{APP_NAME}}
-      AWS_URL: ${HOST_IP:-http://localhost}:9090/{{APP_NAME}}
+      AWS_URL: http://${HOST_IP:-localhost}:9090/{{APP_NAME}}
       AWS_ENDPOINT: http://minio:9090
     volumes:
       - {{APP_NAME}}_storage:/var/www/{{SOURCE_DIR}}/storage
