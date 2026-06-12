@@ -67,7 +67,7 @@ Sebelum menjalankan platform, pastikan host Anda memenuhi spesifikasi berikut:
 | :--- | :--- | :--- |
 | **Sistem Operasi** | Linux (Ubuntu Server 20.04/22.04 LTS direkomendasikan) | Mendukung kernel modern untuk filesystem overlay2 |
 | **Docker Engine** | Version 24.x atau lebih tinggi | Memerlukan Docker Compose v2 (fitur `include` & `extends`) |
-| **Spesifikasi Hardware**| 4 Cores CPU, 8 GB RAM (Development) / 16 GB RAM (Production) | Dibutuhkan untuk menjalankan database, S3, proxy, dan 4 aplikasi bersamaan |
+| **Spesifikasi Hardware**| 4 Cores CPU, 8 GB RAM (Development) / 16 GB RAM (Production) | Dibutuhkan untuk menjalankan database, S3, proxy, dan seluruh (7) aplikasi bersamaan |
 | **Utilitas Host** | Git, OpenSSL, bash v4+ | Diperlukan oleh skrip automasi pengelola platform |
 
 ### Instalasi Docker Otomatis
@@ -114,6 +114,9 @@ cp env/prod.env.example env/prod.env
 ./rsch prepare iam
 ./rsch prepare ikp
 ./rsch prepare lms
+./rsch prepare smsp
+./rsch prepare fe-smsp
+./rsch prepare rbv
 
 # Atau siapkan semuanya sekaligus (interaktif berurutan)
 ./rsch prepare all
@@ -338,6 +341,9 @@ server {
 ```bash
 # Siapkan aplikasi baru (Clone repo & build)
 ./rsch prepare nama-app-baru
+
+# Khusus aplikasi frontend (seperti React/Vite) tanpa backend PHP:
+# Sesuaikan 'framework' di apps/<nama>/app.yml menjadi react-vite
 
 # Jalankan service kontainer baru
 ./rsch up

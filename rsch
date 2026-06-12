@@ -165,7 +165,9 @@ cmd_run_app() {
 
     local services=()
     for app in "$@"; do
-        services+=("app-${app}" "queue-${app}" "scheduler-${app}")
+        services+=("app-${app}")
+        grep -q -E "^queue:\s*true" "${SCRIPT_DIR}/apps/${app}/app.yml" 2>/dev/null && services+=("queue-${app}")
+        grep -q -E "^scheduler:\s*true" "${SCRIPT_DIR}/apps/${app}/app.yml" 2>/dev/null && services+=("scheduler-${app}")
     done
 
     log_info "Starting: $*"
@@ -205,7 +207,9 @@ cmd_down_app() {
 
     local services=()
     for app in "${apps[@]}"; do
-        services+=("app-${app}" "queue-${app}" "scheduler-${app}")
+        services+=("app-${app}")
+        grep -q -E "^queue:\s*true" "${SCRIPT_DIR}/apps/${app}/app.yml" 2>/dev/null && services+=("queue-${app}")
+        grep -q -E "^scheduler:\s*true" "${SCRIPT_DIR}/apps/${app}/app.yml" 2>/dev/null && services+=("scheduler-${app}")
     done
 
     if [ "$remove_volumes" = true ]; then
@@ -271,8 +275,12 @@ cmd_restart() {
         log_error "Usage: ./rsch restart <app>"
         exit 1
     fi
-    log_info "Restarting app-${app}..."
-    $(_compose_cmd) restart "app-${app}" "queue-${app}" "scheduler-${app}"
+    local services=("app-${app}")
+    grep -q -E "^queue:\s*true" "${SCRIPT_DIR}/apps/${app}/app.yml" 2>/dev/null && services+=("queue-${app}")
+    grep -q -E "^scheduler:\s*true" "${SCRIPT_DIR}/apps/${app}/app.yml" 2>/dev/null && services+=("scheduler-${app}")
+    
+    log_info "Restarting ${services[*]}..."
+    $(_compose_cmd) restart "${services[@]}"
     log_success "Restarted ${app}"
 }
 

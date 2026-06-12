@@ -8,16 +8,15 @@ This document provides a deep-dive architectural map of the **RSCH Application P
 
 Below is the complete tree representing the workspace organization.
 
-```
+```text
 rsch-apps/
-├── compose/                         # Docker Compose modular configuration files
 ├── apps/                            # Application metadata and runtime base environments
+├── compose/                         # Docker Compose modular configuration files
 ├── docker/                          # Low-level service and container runtimes configs
 ├── env/                             # Environment variables & runtime secrets (Gitignored)
 ├── scripts/                         # Command utilities, health checkers, & maintenance scripts
 ├── sources/                         # Raw application source code directories (Gitignored)
 ├── storage/                         # Local mount directories for persistent database/storage files
-├── ansible/                         # Remote setup and deployment playbooks
 │
 ├── compose.yml                      # Main Compose aggregator manifest
 ├── rsch                             # Platform Orchestration CLI entrypoint
@@ -27,196 +26,133 @@ rsch-apps/
 │
 ├── README.md                        # Quick-start and main systems overview
 └── docs/                            # Deep-dive platform documentation
+    ├── APPS.md                      # Detailed registry and setup of each application
     ├── USAGE.md                     # Exhaustive runtime and operations guide
     └── STRUCTURE.md                 # This file
 ```
 
 ---
 
-## 🐳 Modular Compose Architecture (`compose/`)
+## 📋 Application Registry & Metadata (`apps/`)
 
-The platform avoids a single massive `docker-compose.yml` file by using the `include` and `extends` directives of Docker Compose v2. The files are divided as follows:
+Setiap aplikasi memiliki direktorinya sendiri di dalam folder `apps/`. Folder ini berfungsi sebagai titik referensi bagi skrip otomasi.
+Contoh struktur `apps/siimut/`:
+*   **`app.yml`**: Berisi definisi nama, URL repository, target branch, penamaan image, spesifikasi port (host/internal), routing nginx, koneksi database, dan apakah aplikasi tersebut menggunakan antrean/scheduler.
+*   **`Dockerfile`**: Resep instruksi build Docker untuk mengompilasi image production khusus aplikasi tersebut (biasanya berbasis template `docker/php/Dockerfile.production`).
+*   **`.env.example`**: Referensi template *environment variables* yang wajib disuplai ke dalam aplikasi saat dijalankan.
 
-```
-compose/
-├── base/                            # Core infrastructural engines
-│   ├── infra.yml                    # Aggregator manifest to run all core infrastructure
-│   ├── network.yml                  # Configures global network (172.20.0.0/16) and volumes
-│   ├── web.yml                      # Main Nginx router with multi-vhost mapping & port binds
-│   ├── database.yml                 # MySQL 8.0 instance (database-service)
-│   ├── minio.yml                    # MinIO S3 object storage server & auto-bucket creation job
-│   ├── phpmyadmin.yml               # Web interface for database administration (Development only)
-│   └── php-base.yml                 # Core PHP-FPM service templates (App, Queue Worker, Scheduler)
-│
-├── apps/                            # Application-specific Compose definitions (Modular)
-│   ├── siimut.yml                   # SIIMUT containers (App, Queue Daemon, Cron Scheduler)
-│   ├── ikp.yml                      # IKP containers (App, Queue Daemon, Cron Scheduler)
-│   ├── iam.yml                      # SSO Server containers (App, Queue Daemon, Cron Scheduler)
-│   └── lms.yml                      # Learning Management System container (App only)
-│
-├── profiles/                        # Environment port maps & runtime mode overrides
-│   ├── dev.yml                      # Maps applications to development ports (8xx10 series)
-│   └── prod.yml                     # Maps applications to standard production ports (8xx00 series)
-│
-└── build.yml                        # Manifest detailing instructions to build images locally
-```
-
-### 🧬 Inheritance Diagram
-```
-              [ compose.yml ] (Root Entrypoint)
-                     │
-         ┌───────────┴───────────┐
-         ▼                       ▼
- [ compose/profiles/dev.yml ]  [ compose/apps/*.yml ]
-       - or -                    │ (Inherits base traits)
- [ compose/profiles/prod.yml ]   ▼
-                       [ compose/base/php-base.yml ]
-                         ├── php-app-base
-                         ├── php-worker-base
-                         └── php-scheduler-base
-```
+Aplikasi yang saat ini berada di folder `apps/`: `siimut`, `iam`, `ikp`, `lms`, `smsp`, `fe-smsp`, `rbv`. Detail masing-masing baca di **[docs/APPS.md](APPS.md)**.
 
 ---
 
-## 📋 Application Registry & Configurations
+## 🐳 Modular Compose Architecture (`compose/`)
 
-### `apps/` Directory
-Contains configurations used for building and bootstrapping each individual application.
-*   `apps/<app>/app.yml`: Metadata registry listing repository endpoint, active branch, target directory name, database name, and status of queue/scheduler.
-*   `apps/<app>/Dockerfile`: Custom multi-stage build instructions optimized for production.
-*   `apps/<app>/.env.example`: Template variables representing production-specific values (e.g. database credentials, API endpoints).
+Platform menghindari satu file `docker-compose.yml` monolitik yang berukuran masif dengan memecahnya ke dalam modul menggunakan fitur `include` dan `extends` (Docker Compose v2).
 
-### `repos.csv`
-A central tabular registry read by scripts to discover applications. Format:
-```csv
-name,dir,repo,branch,has_prod,has_deps,desc
-siimut,siimut,https://github.com/juniyasyos/si-imut.git,main,yes,yes,Sistem Informasi Imunisasi
-iam,iam,https://github.com/juniyasyos/iam-server.git,main,yes,yes,Authentication & SSO Server
-ikp,ikp,https://github.com/juniyasyos/ikp.git,main,yes,yes,Incident Reporting & Pelaporan
-lms,lms,https://github.com/juniyasyos/lms-citrahusada.git,main,yes,yes,Learning Management System
-```
-
-### `.app-modes` (New)
-Maintains states between interactive preparation runs. It holds the active configuration source for each app (e.g. Dockerfile generation, local Git code building, or direct Docker registry consumption):
-```ini
-siimut=clone:https://github.com/juniyasyos/si-imut.git
-iam=image:ghcr.io/juniyasyos/iam-server:v2.1.0
-ikp=dockerfile:laravel
+```text
+compose/
+├── base/                            # Layanan inti infrastruktur
+│   ├── infra.yml                    # Aggregator layanan dasar (memuat semua base infra)
+│   ├── network.yml                  # Deklarasi subnet (172.20.0.0/16) dan konfigurasi volume
+│   ├── web.yml                      # Nginx Reverse Proxy & SSL mapping utama
+│   ├── database.yml                 # Layanan MySQL 8.0 (database-service)
+│   ├── minio.yml                    # MinIO S3 object storage server & auto-bucket creation job
+│   ├── phpmyadmin.yml               # GUI Manajemen Database (Aktif di Dev)
+│   └── php-base.yml                 # Template utama service PHP (App, Queue Worker, Scheduler)
+│
+├── apps/                            # Spesifikasi Layanan Per-Aplikasi (Hasil turunan dari base)
+│   ├── siimut.yml                   # SIIMUT containers (App, Daemon, Cron Scheduler)
+│   ├── iam.yml                      # SSO Server containers
+│   ├── ikp.yml                      # IKP containers
+│   ├── lms.yml                      # LMS containers
+│   ├── smsp.yml                     # SMSP Backend containers
+│   ├── fe-smsp.yml                  # SMSP Frontend containers (React/Vite)
+│   └── rbv.yml                      # RBV containers
+│
+├── profiles/                        # Override konfigurasi port mapping
+│   ├── dev.yml                      # Menghubungkan aplikasi ke host port dev (contoh 8010)
+│   └── prod.yml                     # Menghubungkan aplikasi ke host port prod (contoh 8000)
+│
+└── build.yml                        # Manifest instruksi cara men-compile seluruh image lokal
 ```
 
 ---
 
 ## ⚙️ Container Engine Configurations (`docker/`)
 
-Low-level configuration templates used to customize the behavior of runtime environments.
+Konfigurasi level *low* yang memodifikasi sifat sistem operasi dan komponen di dalam kontainer.
 
 *   **`docker/nginx/`**:
-    *   `nginx.conf`: Global Nginx configurations (performance, compression, log format).
-    *   `nginx-multi-apps.conf`: Virtual hosts setup. Routes subdomains/ports to internal fastcgi application ports.
+    *   `nginx.conf`: Konfigurasi Nginx dasar global (performa, timeout, gzip compression).
+    *   `nginx-multi-apps.conf`: File penentu rute (*Virtual Host*). Menentukan ke port internal mana subdomain diarahkan via `proxy_pass` atau `fastcgi_pass`.
 *   **`docker/php/`**:
-    *   `Dockerfile.production`: Master PHP 8.x Alpine template.
-        > [!NOTE]
-        > This file serves as a reference template for manual container configuration. Production builds use specific Dockerfiles located under `apps/<app>/Dockerfile` for modular isolation.
-    *   `entrypoint.sh`: Bootstrapping runtime scripts. Runs DB migrations, configures cached caches (config/routes/events), verifies database socket readiness, and launches php-fpm or supervisor process managers.
-    *   `entrypoint-iam.sh`: Custom entrypoint for IAM Server (generating and validating Passport RSA keys).
-    *   `php.ini`: Hardened production settings (OPcache JIT enabled, memory limit tuning, safety options).
-    *   `supervisord.conf`: Process manager configuration. Runs queue workers and schedule runners concurrently in the same runtime namespace if required.
+    *   `entrypoint.sh`: Titik awal kontainer PHP. Script ini memastikan cache routing dibersihkan, memverifikasi ketersediaan database MySQL menggunakan soket, lalu memulai proses FPM.
+    *   `entrypoint-iam.sh`: Entrypoint unik khusus IAM server untuk membuat file Passport RSA Public/Private Key saat startup.
+    *   `php.ini`: Hardened production settings (OPcache JIT diaktifkan, pengaturan memori).
+    *   `supervisord.conf`: Konfigurasi untuk menjalankan *queue worker* secara presisten sebagai daemon.
 *   **`docker/db/`**:
-    *   `my.cnf`: Hardened MySQL configuration (memory limits, storage engines tuning).
-    *   `sql/`: Database initialization scripts. Any `.sql` or `.sh` script placed here will execute automatically when the database service boots up for the first time.
+    *   `my.cnf`: Tuning parameter InnoDB MySQL dan pengaturan batasan memori.
+    *   `sql/`: Skrip `init` yang berjalan otomatis jika basis data MySQL masih kosong di awal pembuatan kontainer.
 
 ---
 
-## 🐍 Orchestration & Maintenance Automation (`scripts/`)
+## 🐍 Automasi & Utilitas Sistem (`scripts/`)
 
-```
+Skrip di dalam direktori `scripts/` digunakan sebagai ekstensi *backend* dari perintah CLI `./rsch`.
+
+```text
 scripts/
 ├── prepare.sh                       # Core unified orchestration logic (runs mode selection)
 ├── build.sh                         # Automated image compiling and tagging
-├── deploy.sh                        # Interface between ./rsch commands and docker compose execution
+├── deploy.sh                        # Docker compose interface (penerjemah opsi run)
+├── scaffold.sh                      # Boilerplate generator untuk aplikasi baru
 │
-├── prepare/                         # Modularity adapters for rsch prepare modes
-│   ├── mode_dockerfile.sh           #   [Mode 1] Generates custom PHP-Alpine Dockerfiles
-│   ├── mode_clone.sh                #   [Mode 2] Orchestrates Git pulling, NPM building, and secret generation
-│   ├── mode_image.sh                #   [Mode 3] Binds external container images to deployment registry
-│   └── install-docker.sh            #   Installs Docker Engine on clean Debian/Ubuntu hosts
+├── prepare/                         # Modularity adapters untuk './rsch prepare'
+│   ├── mode_dockerfile.sh           #   [Mode 1] Meng-generate Dockerfile PHP Alpine
+│   ├── mode_clone.sh                #   [Mode 2] Clone kode, install composer/npm, generate config
+│   ├── mode_image.sh                #   [Mode 3] Mendaftarkan remote Docker registry image
+│   └── install-docker.sh            #   Auto-installer bash untuk Ubuntu/Debian host
 │
-├── health/                          # Environment health check procedures
-│   ├── check-iam.sh                 #   Validates SSO server API responsiveness & JWT token states
-│   └── check-minio.sh               #   Validates MinIO API port connectivity
+├── health/                          # Penguji interaksi layanan (./rsch health <app>)
+│   ├── check-iam.sh                 #   Validasi SSO server API & token
+│   └── check-minio.sh               #   Validasi MinIO S3 dan pembuatan Bucket
 │
-└── maintenance/                     # Troubleshooting utilities
-    ├── diagnose.sh                  #   General stack connectivity diagnostics helper
-    ├── diagnose-autoload.sh         #   Verifies composer autoload integrity inside sources/
-    ├── diagnose-iam.sh              #   SSO specific database & route connectivity test
-    ├── diagnose-livewire.sh         #   Verifies Livewire CDN asset publication statuses
-    ├── diagnose-signatory.sh        #   Checks cryptographic key validity
-    └── fix-network.sh               #   Flushes and restarts container networks to solve route conflicts
+├── maintenance/                     # Troubleshooting tools
+│   ├── diagnose.sh                  #   Pemeriksa konektivitas jaringan secara umum
+│   ├── diagnose-autoload.sh         #   Pemeriksa masalah class dumping di Composer
+│   ├── diagnose-iam.sh              #   Pemeriksa setup OAuth2 client credentials
+│   ├── diagnose-livewire.sh         #   Pemeriksa rendering CDN Livewire
+│   ├── diagnose-signatory.sh        #   Pemeriksa status enkripsi
+│   └── fix-network.sh               #   Script tanggap darurat mereset jembatan DNS Docker
+│
+└── .scaffold_py/                    # Python parser untuk injeksi dinamis dari ./rsch scaffold
+    ├── insert_build.py, insert_compose.py, insert_web.py
 ```
-
-> [!WARNING]
-> **Renamed Diagnostic scripts**: The script `scripts/health/check-jwt.sh` has been renamed to [scripts/health/check-iam.sh](file:///home/juni/projects/docker/rsch-apps/scripts/health/check-iam.sh) to match the naming of the target application "IAM" and facilitate execution through the unified `./rsch health iam` endpoint.
 
 ---
 
 ## 🔒 Storage, Sources, & Variables Segregation
 
 ### `sources/` (Gitignored)
-Raw code repositories cloned from origin Git URLs. These folders are mounted to containers as volumes when running in development/debug mode to enable instant code reloading.
-*   `sources/siimut/`
-*   `sources/ikp/`
-*   `sources/iam/`
-*   `sources/lms/`
+Folder ini menampung seluruh *source code* (kode sumber) aplikasi hasil pull dari Git (contoh: `sources/siimut`, `sources/iam-server`). Folder ini akan langsung di-*mount* ke dalam kontainer jika aplikasi berjalan pada environment lokal, memastikan setiap *save* file akan langsung merefresh kontainer.
 
 ### `storage/` (Gitignored)
-Persistent volumes mounted on the host machine to prevent data loss when containers are destroyed or updated.
-*   `storage/mysql/`: Relational database files.
-*   `storage/minio/`: Object storage bucket directories.
-*   `storage/logs/`: Unified location for runtime PHP logs.
+Data vital aplikasi disimpan secara persisten di folder host ini, sehingga file fisik tidak akan hilang walaupun seluruh Docker container dan image dihapus (contoh: `./rsch down` atau `./rsch infra down`).
+*   `storage/mysql/`: Database state.
+*   `storage/minio/`: Dokumen dan media yang diupload ke S3 Storage lokal.
+*   `storage/logs/`: Menyimpan output nginx dan laravel error log terpusat.
 
 ### `env/` (Gitignored)
-*   `common.env`: Shared parameters (root credentials).
-*   `dev.env`: Development variables (bind IP, development ports map).
-*   `prod.env`: Production variables (bind IP, production ports map).
-*   `.env.prod.<app>` (Generated): Dynamically generated secrets for production mode.
+Mengisolasi data sensitif seperti password dari repositori Git:
+*   `common.env`: Variabel awam (Root DB config).
+*   `dev.env` & `prod.env`: Pemetaan target alamat Host IP.
+*   `.env.prod.<app>`: Kredensial spesifik production per aplikasi (misal `DB_PASSWORD` dan enkripsi `APP_KEY`) yang akan diisi secara acak oleh skrip mode prepare secara aman.
 
 ---
 
 ## 🌐 Network Topography & Volume Map
 
-### Logical Network Settings
 *   **Network Name**: `rsch-apps_default`
 *   **Subnet CIDR**: `172.20.0.0/16`
-*   **Gateway**: `172.20.0.1`
 
-| Service | Container Alias | Internal Port | Exposed Port (Dev) | Exposed Port (Prod) |
-| :--- | :--- | :---: | :---: | :---: |
-| Nginx Reverse Proxy | `multi-web` | `80`, `443` | `80`, `443` | `80`, `443` |
-| MySQL Database | `database-service` | `3306` | `3306` | — |
-| MinIO Storage API | `minio` | `9000` | `9090` | `9090` |
-| MinIO Web Console | `minio` | `9001` | `9091` | `9091` |
-| phpMyAdmin | `phpmyadmin` | `80` | `8888` | — |
-| SIIMUT Application | `siimut-app` | `9000` | `8010` | `8000` |
-| IAM Server SSO | `iam-app` | `9000` | `8110` | `8100` |
-| IKP Incident Service | `ikp-app` | `9000` | `8210` | `8200` |
-| LMS CitraHusada | `lms-app` | `9000` | `7000` | `7000` |
-
-### Core Volume Maps
-```mermaid
-graph LR
-    subgraph Host Storage
-        host_mysql[storage/mysql]
-        host_minio[storage/minio]
-        host_siimut_storage[sources/siimut/storage]
-    end
-
-    subgraph Container Runtimes
-        MySQL_C[database-service]
-        MinIO_C[minio]
-        SIIMUT_C[siimut-app]
-    end
-
-    host_mysql -->|Mounts: /var/lib/mysql| MySQL_C
-    host_minio -->|Mounts: /data| MinIO_C
-    host_siimut_storage -->|Mounts: /var/www/siimut/storage| SIIMUT_C
-```
+Semua layanan tidak terbuka keluar secara langsung (Isolated internal routing), KECUALI Nginx Proxy. Skrip routing di dalam proxy `nginx-multi-apps.conf` yang mengurusi translasi ke port fastCGI (`9000`) dari setiap kontainer aplikasi.

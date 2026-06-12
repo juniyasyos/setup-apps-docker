@@ -5,7 +5,10 @@ framework: react-vite
 repo: https://github.com/Iannn-vbeta/fe-react-smartpresence.git
 branch: main
 
-image: fe-smsp:v1.0.0
+image: fe-smsp
+version: v1.0.0
+queue: false
+scheduler: false
 
 source_dir: site/fe-smsp
 dockerfile: apps/fe-smsp/Dockerfile

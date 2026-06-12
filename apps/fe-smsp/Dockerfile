@@ -22,7 +22,10 @@ WORKDIR /app
 
 COPY package*.json ./
 
-RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+RUN npm config set fetch-retries 5 && \
+    npm config set fetch-retry-mintimeout 20000 && \
+    npm config set fetch-retry-maxtimeout 120000 && \
+    if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 COPY . .
 
