@@ -158,7 +158,9 @@ cmd_run_app() {
     if [ $# -eq 0 ]; then
         log_error "Usage: ./rsch run-app <app> [app ...]"
         echo ""
-        log_info "Available apps: siimut, ikp, iam, lms"
+        local available_apps
+        available_apps=$(ls -1 "${SCRIPT_DIR}/apps" 2>/dev/null | paste -sd, - | sed 's/,/, /g' || echo "siimut, ikp, iam, lms, smsp, rbv, fe-smsp")
+        log_info "Available apps: ${available_apps}"
         log_info "Example: ./rsch run-app siimut ikp iam"
         exit 1
     fi
@@ -184,7 +186,9 @@ cmd_down_app() {
     if [ $# -eq 0 ]; then
         log_error "Usage: ./rsch down-app <app> [app ...] [-v]"
         echo ""
-        log_info "Available apps: siimut, ikp, iam, lms"
+        local available_apps
+        available_apps=$(ls -1 "${SCRIPT_DIR}/apps" 2>/dev/null | paste -sd, - | sed 's/,/, /g' || echo "siimut, ikp, iam, lms, smsp, rbv, fe-smsp")
+        log_info "Available apps: ${available_apps}"
         log_info "Example: ./rsch down-app siimut ikp"
         log_info "         ./rsch down-app siimut -v"
         exit 1
@@ -294,7 +298,9 @@ cmd_exec() {
     if [ -z "$app" ]; then
         log_error "Usage: ./rsch exec <app> [command]"
         echo ""
-        log_info "Available apps: siimut, ikp, iam, lms"
+        local available_apps
+        available_apps=$(ls -1 "${SCRIPT_DIR}/apps" 2>/dev/null | paste -sd, - | sed 's/,/, /g' || echo "siimut, ikp, iam, lms, smsp, rbv, fe-smsp")
+        log_info "Available apps: ${available_apps}"
         log_info "Example: ./rsch exec siimut"
         log_info "         ./rsch exec siimut bash"
         exit 1
