@@ -5,7 +5,7 @@ branch: main
 source_dir: lms-app
 image: juniyasyos/lms
 version: v1.0.0
-port: 8080
+port: 7100
 domain: lms.local
 database: lms_db
 db_user: lms_user

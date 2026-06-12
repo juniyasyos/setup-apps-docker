@@ -8,15 +8,15 @@ services:
       service: php-app-base
     image: lms:v1.0.0
     container_name: lms-app
-    working_dir: /var/www/lms-app
+    working_dir: /var/www/lms
     env_file:
       - ../../apps/lms/.env.example
     environment:
       APP_ENV: production
       APP_DEBUG: "true"
-      APP_WORKDIR: /var/www/lms-app
-      PUBLIC_VOLUME: /var/www/lms-app/public
-      APP_URL: "http://${HOST_IP}:8080"
+      APP_WORKDIR: /var/www/lms
+      PUBLIC_VOLUME: /var/www/lms/public
+      APP_URL: "http://${HOST_IP}:7100"
       TRUSTED_PROXIES: "*"
       DB_HOST: database-service
       DB_USERNAME: lms_user
@@ -29,9 +29,9 @@ services:
       AWS_URL: http://${HOST_IP}:9090/lms
       AWS_ENDPOINT: http://minio:9090
     volumes:
-      - lms_storage:/var/www/lms-app/storage
-      - lms_bootstrap_cache:/var/www/lms-app/bootstrap/cache
-      - lms_public:/var/www/lms-app/public
+      - lms_storage:/var/www/lms/storage
+      - lms_bootstrap_cache:/var/www/lms/bootstrap/cache
+      - lms_public:/var/www/lms/public
     deploy:
       resources:
         limits:
@@ -47,7 +47,7 @@ services:
       service: php-worker-base
     image: lms:v1.0.0
     container_name: lms-queue
-    working_dir: /var/www/lms-app
+    working_dir: /var/www/lms
     env_file:
       - ../../apps/lms/.env.example
     environment:
@@ -55,8 +55,8 @@ services:
       DB_USERNAME: lms_user
       DB_PASSWORD: lms_pass123
     volumes:
-      - lms_storage:/var/www/lms-app/storage
-      - lms_bootstrap_cache:/var/www/lms-app/bootstrap/cache
+      - lms_storage:/var/www/lms/storage
+      - lms_bootstrap_cache:/var/www/lms/bootstrap/cache
     command: >
       artisan queue:work
         --sleep=5
@@ -79,7 +79,7 @@ services:
       service: php-scheduler-base
     image: lms:v1.0.0
     container_name: lms-scheduler
-    working_dir: /var/www/lms-app
+    working_dir: /var/www/lms
     env_file:
       - ../../apps/lms/.env.example
     environment:
@@ -87,8 +87,8 @@ services:
       DB_USERNAME: lms_user
       DB_PASSWORD: lms_pass123
     volumes:
-      - lms_storage:/var/www/lms-app/storage
-      - lms_bootstrap_cache:/var/www/lms-app/bootstrap/cache
+      - lms_storage:/var/www/lms/storage
+      - lms_bootstrap_cache:/var/www/lms/bootstrap/cache
     command: >
       artisan schedule:work
     deploy:

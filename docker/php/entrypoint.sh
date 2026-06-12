@@ -31,7 +31,7 @@ set_env() {
         sed -i "s~^${key}=.*~${key}=${value}~" .env
     else
         # Ensure trailing newline before appending to avoid corrupting last line
-        # (e.g., VITE_APP_NAME="${APP_NAME}"APP_WORKDIR=/var/www/lms-app)
+        # (e.g., VITE_APP_NAME="${APP_NAME}"APP_WORKDIR=/var/www/lms)
         if [ -s .env ] && [ "$(tail -c1 .env | xxd -p)" != "0a" ]; then
             echo >> .env
         fi

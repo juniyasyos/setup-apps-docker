@@ -1,99 +1,122 @@
-# =============================================================================
-# Dockerfile — lms
-# Framework  : Laravel (PHP-FPM / Alpine)
-# Generated  : 2026-06-10 21:05:57
-# Generator  : rsch prepare (mode: dockerfile)
-# =============================================================================
-
-# ─────────────────────────────────────────
-# Stage 1: Base — PHP + extensions
-# ─────────────────────────────────────────
+# ============================================
+# Production lms Image for Docker Hub
+# Optimized: Build once, use 3x (app/queue/scheduler)
+# ============================================
 FROM php:8.4-fpm-alpine AS base
 
 ARG UID=1000
 ARG GID=1000
 ARG TZ=Asia/Jakarta
-ARG APP_NAME="lms"
-ARG APP_WORKDIR=/var/www/html
+ARG APP_NAME="LMS - Learning Management System"
 
+# Install system dependencies and PHP extensions
 RUN apk add --no-cache \
       tzdata bash shadow ca-certificates unzip \
       icu-dev oniguruma-dev libzip-dev zlib-dev \
       libpng-dev libjpeg-turbo-dev freetype-dev \
       libxml2-dev postgresql-dev \
-      linux-headers curl openssl \
+      linux-headers \
+      curl openssl \
+      mariadb-client \
+      su-exec \
       $PHPIZE_DEPS \
-      vim \
   && cp /usr/share/zoneinfo/${TZ} /etc/localtime \
   && echo "${TZ}" > /etc/timezone \
   && docker-php-ext-configure intl \
   && docker-php-ext-configure gd --with-freetype --with-jpeg \
   && docker-php-ext-install -j"$(nproc)" \
-       intl mbstring pdo pdo_mysql pdo_pgsql pgsql zip gd \
-       bcmath exif pcntl sockets opcache \
-  && pecl install apcu igbinary \
-  && docker-php-ext-enable apcu igbinary \
+      intl \
+      mbstring \
+      pdo \
+      pdo_mysql \
+      pdo_pgsql \
+      pgsql \
+      zip \
+      gd \
+      bcmath \
+      exif \
+      pcntl \
+      sockets \
+      opcache \
+  && pecl install igbinary apcu \
+  && docker-php-ext-enable igbinary apcu \
   && apk del --no-network $PHPIZE_DEPS linux-headers \
   && rm -rf /var/cache/apk/* /tmp/*
 
-# Composer dari image resmi
+# Copy composer binary
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# User non-root untuk runtime
+# Create non-root user
 RUN addgroup -g "${GID}" www \
   && adduser -D -G www -u "${UID}" www \
   && sed -ri 's/^user = .*/user = www/' /usr/local/etc/php-fpm.d/www.conf \
   && sed -ri 's/^group = .*/group = www/' /usr/local/etc/php-fpm.d/www.conf
 
-WORKDIR ${APP_WORKDIR}
 ENV APP_NAME=${APP_NAME}
 
-# ─────────────────────────────────────────
-# Stage 2: Dependencies — composer install
-# ─────────────────────────────────────────
-FROM base AS deps
+# ============================================
+# Stage 2: Build & Dependencies
+# ============================================
+FROM base AS builder
 
-ARG APP_DIR=lms-app
+ARG APP_DIR=
+
 ENV COMPOSER_CACHE_DIR=/tmp/composer-cache \
-    COMPOSER_MEMORY_LIMIT=-1
+    COMPOSER_MEMORY_LIMIT=-1 \
+    COMPOSER_NO_INTERACTION=1
 
-WORKDIR ${APP_WORKDIR}
+WORKDIR /build
 
-COPY . ./temp_context
+# Copy only composer files first (better caching)
+COPY site/${APP_DIR}/composer.json site/${APP_DIR}/composer.lock* ./
 
+# Install composer dependencies with optimization
 RUN set -eux; \
-    echo ">> Building for APP_DIR='${APP_DIR}'"; \
-    if [ -d "temp_context/site/${APP_DIR}" ]; then \
-      cp -r "temp_context/site/${APP_DIR}/." "./"; \
-    else \
-      cp -r "temp_context/." "./"; \
-    fi; \
-    rm -rf temp_context; \
-    if [ -f composer.json ]; then \
-      composer install \
-        --no-dev \
-        --prefer-dist \
-        --no-interaction \
-        --no-progress \
-        --optimize-autoloader \
-        --classmap-authoritative; \
-    fi; \
-    rm -rf "$COMPOSER_CACHE_DIR" /tmp/*
+    composer install \
+      --no-dev \
+      --prefer-dist \
+      --no-interaction \
+      --no-progress \
+      --no-scripts \
+      --optimize-autoloader \
+      --classmap-authoritative; \
+    rm -rf "$COMPOSER_CACHE_DIR"
 
-# ─────────────────────────────────────────
-# Stage 3: Runtime — Production
-# ─────────────────────────────────────────
-FROM base AS app
+# Copy entire application code
+COPY site/${APP_DIR}/ ./
+
+# Finalize: dump autoloader and optimize
+RUN set -eux; \
+    composer dump-autoload --optimize --classmap-authoritative --no-scripts 2>/dev/null || true; \
+    # Clear any potential config caches created during composer commands
+    if [ -f artisan ]; then \
+      php artisan config:clear 2>/dev/null || true; \
+    fi; \
+    if [ -d vendor/livewire ]; then \
+      echo "✅ Livewire verified"; \
+    else \
+      echo "⚠️ Livewire not found in dependencies"; \
+    fi
+
+# ============================================
+
+# ============================================
+# Stage 3: Runtime (Final Image)
+# ============================================
+FROM base AS runtime
 
 ARG TZ=Asia/Jakarta
-ARG APP_NAME="lms"
+ARG APP_NAME="Smartpresence Deskripsi"
 
 ENV APP_ENV=production \
+    APP_WORKDIR=/var/www/lms/ \
     PHP_OPCACHE_VALIDATE_TIMESTAMPS=0 \
     PHP_MEMORY_LIMIT=512M \
     APP_NAME=${APP_NAME}
 
-# PHP & FPM production tuning
+WORKDIR ${APP_WORKDIR}
+
+# PHP Configuration (production optimized)
 RUN set -eux; \
   { \
     echo "memory_limit=${PHP_MEMORY_LIMIT}"; \
@@ -133,30 +156,27 @@ RUN set -eux; \
   sed -ri 's|^;?pm\.min_spare_servers =.*|pm.min_spare_servers = 4|' /usr/local/etc/php-fpm.d/www.conf; \
   sed -ri 's|^;?pm\.max_spare_servers =.*|pm.max_spare_servers = 16|' /usr/local/etc/php-fpm.d/www.conf; \
   sed -ri 's|^;?pm\.max_requests =.*|pm.max_requests = 1000|' /usr/local/etc/php-fpm.d/www.conf; \
-  sed -ri 's|^;?request_terminate_timeout =.*|request_terminate_timeout = 120s|' /usr/local/etc/php-fpm.d/www.conf; \
-  sed -ri 's|^;?clear_env =.*|clear_env = no|' /usr/local/etc/php-fpm.d/www.conf; \
-  sed -ri 's|^;?access\.log =.*|access.log = /proc/self/fd/2|' /usr/local/etc/php-fpm.d/www.conf
+  sed -ri 's|^;?clear_env =.*|clear_env = no|' /usr/local/etc/php-fpm.d/www.conf
 
-# Copy app + vendor dari stage deps
-COPY --from=deps ${APP_WORKDIR} ${APP_WORKDIR}
+# Copy application from builder stage
+COPY --from=builder --chown=www:www /build ${APP_WORKDIR}
 
-# Permissions
+# Setup Laravel directories and permissions
 RUN set -eux; \
-    if [ -d storage ]; then \
-      chown -R www:www storage bootstrap/cache || true; \
-      chmod -R ug+rwX storage bootstrap/cache || true; \
-    fi; \
-    if [ -d public ]; then \
-      chmod -R 755 public || true; \
-    fi
+    chown -R www:www storage bootstrap/cache; \
+    chmod -R ug+rwX storage bootstrap/cache; \
+    chmod -R 775 storage/framework/views; \
+    if [ -d public ]; then chmod -R 755 public; fi
 
-COPY apps/lms/entrypoint.sh /usr/local/bin/entrypoint.sh
+# Copy entrypoint script
+COPY docker/php/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 EXPOSE 9000
 
+# Lightweight health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD php -r "exit(extension_loaded('opcache') && extension_loaded('apcu') ? 0 : 1);"
+  CMD php -r "exit(extension_loaded('opcache') ? 0 : 1);"
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["php-fpm", "-F"]
