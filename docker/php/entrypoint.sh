@@ -104,6 +104,10 @@ if [ -z "$APP_KEY" ]; then
 fi
 
 # Ensure APP_KEY is set (generate if missing, empty, or just "base64:")
+if ! grep -q "^APP_KEY=" .env; then
+    echo "APP_KEY=" >> .env
+fi
+
 APP_KEY_VALUE=$(grep -E '^APP_KEY=' .env | head -1 | cut -d'=' -f2- | tr -d '\r' || true)
 if [ -z "${APP_KEY_VALUE}" ] || [ "${APP_KEY_VALUE}" = "base64:" ] || [ "${#APP_KEY_VALUE}" -le 10 ]; then
     echo "🔐 Generating APP_KEY..."
@@ -356,21 +360,32 @@ fi
 
 # Verify APP_KEY is actually loaded by Laravel configuration (tinker check)
 echo "🔍 Verifying APP_KEY in Laravel configuration..."
-TINKER_KEY=$(php artisan tinker --execute="echo config('app.key');" 2>/dev/null | tr -d '\r' || true)
-if [ -n "$TINKER_KEY" ]; then
-    echo "✅ Laravel APP_KEY verified successfully: ${TINKER_KEY:0:15}..."
-else
-    echo "❌ CRITICAL: Laravel config('app.key') is EMPTY in config cache!"
-    echo "🧹 Attempting to clear config cache..."
-    php artisan config:clear || true
-    # Try one more check
-    TINKER_KEY_RETRY=$(php artisan tinker --execute="echo config('app.key');" 2>/dev/null | tr -d '\r' || true)
-    if [ -n "$TINKER_KEY_RETRY" ]; then
-        echo "✅ Fixed! Laravel APP_KEY verified after config clear: ${TINKER_KEY_RETRY:0:15}..."
+MAX_CHECKS=3
+CHECK_COUNT=0
+
+while [ $CHECK_COUNT -lt $MAX_CHECKS ]; do
+    TINKER_KEY=$(php artisan tinker --execute="echo config('app.key');" 2>/dev/null | tr -d '\r' || true)
+    if [ -n "$TINKER_KEY" ] && [ "${#TINKER_KEY}" -gt 10 ]; then
+        echo "✅ Laravel APP_KEY verified successfully: ${TINKER_KEY:0:15}..."
+        break
     else
-        echo "❌ CRITICAL ERROR: APP_KEY remains empty! Application will fail to decrypt sessions."
+        echo "❌ CRITICAL: Laravel config('app.key') is EMPTY in config cache!"
+        echo "🧹 Attempting to generate key and re-optimize..."
+        
+        if ! grep -q "^APP_KEY=" .env; then
+            echo "APP_KEY=" >> .env
+        fi
+        
+        php artisan key:generate --force || true
+        run_as_www php artisan optimize >/dev/null 2>&1 || true
     fi
-fi
+    CHECK_COUNT=$((CHECK_COUNT + 1))
+    
+    if [ $CHECK_COUNT -eq $MAX_CHECKS ]; then
+        echo "❌ CRITICAL ERROR: APP_KEY remains empty after $MAX_CHECKS attempts! Application will fail to decrypt sessions."
+    fi
+    sleep 1
+done
 
 # Execute main command
 if [ $# -eq 0 ]; then

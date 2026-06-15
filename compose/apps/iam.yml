@@ -15,7 +15,7 @@ services:
       TRUSTED_PROXIES: "*"
       PHP_OPCACHE_VALIDATE_TIMESTAMPS: "0"
       APP_WORKDIR: /var/www/iam
-      PUBLIC_VOLUME: /var/www/public-shared-iam
+      PUBLIC_VOLUME: /var/www/iam
       DB_HOST: database-service
       APP_URL: "http://${HOST_IP}:8100"
       IAM_ISSUER: "http://${HOST_IP}:8100"
@@ -30,7 +30,8 @@ services:
     volumes:
       - iam_storage:/var/www/iam/storage
       - iam_bootstrap_cache:/var/www/iam/bootstrap/cache
-      - iam_public:/var/www/public-shared-iam
+      - iam_public:/var/www/public-shared
+      - ../../../../apps/auth-server/public/build:/var/www/iam/public/build
     deploy:
       resources:
         limits:
