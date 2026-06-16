@@ -101,14 +101,17 @@ COMMANDS:
   Runtime:
     up [--dev|--prod]   Start all services
     down [--dev|--prod] Stop all services
+    down-all-service    Stop all apps and infrastructure
     use <dev|prod>      Set global environment mode
     run-app <app>...    Start specific app(s) (e.g. run-app siimut ikp)
     down-app <app>...   Stop specific app(s). Add -v to remove volumes
     restart <app>       Restart a specific app service
 
   Infrastructure:
-    infra up            Start infrastructure only (DB, MinIO, Nginx)
-    infra down          Stop infrastructure
+    infra up [svc...]   Start infrastructure (DB, MinIO, Nginx, etc)
+    infra down [svc...] Stop and remove infrastructure (or specific services)
+    infra stop [svc...] Stop infrastructure without removing containers
+    infra restart [svc] Restart infrastructure
 
   Debug & Health:
     logs <app>          Show logs for a specific app
@@ -256,6 +259,21 @@ cmd_down() {
 }
 
 # ──────────────────────────────────────────────
+# Down All Service
+# ──────────────────────────────────────────────
+cmd_down_all_service() {
+    log_info "Stopping all applications and infrastructure..."
+    
+    # 1. Stop applications
+    $(_compose_cmd) down --remove-orphans
+    
+    # 2. Stop infrastructure
+    $(_compose_cmd "${SCRIPT_DIR}/compose/base/infra.yml") down --remove-orphans
+    
+    log_success "All applications and infrastructure have been stopped."
+}
+
+# ──────────────────────────────────────────────
 # Use — set global environment mode
 # Usage: ./rsch use dev|prod
 # ──────────────────────────────────────────────
@@ -346,25 +364,55 @@ cmd_health() {
 # ──────────────────────────────────────────────
 cmd_infra() {
     local action="${1:-}"
+    shift || true
     local compose_file="${SCRIPT_DIR}/compose/base/infra.yml"
     case "$action" in
         up)
-            log_info "Starting infrastructure services with $(_resolve_mode) env..."
-            $(_compose_cmd "${compose_file}") up -d
-            log_success "Infrastructure started"
+            if [ $# -gt 0 ]; then
+                log_info "Starting infrastructure services ($*) with $(_resolve_mode) env..."
+                $(_compose_cmd "${compose_file}") up -d "$@"
+                log_success "Infrastructure services ($*) started"
+            else
+                log_info "Starting infrastructure services with $(_resolve_mode) env..."
+                $(_compose_cmd "${compose_file}") up -d
+                log_success "Infrastructure started"
+            fi
             ;;
         down)
-            log_info "Stopping infrastructure services..."
-            $(_compose_cmd "${compose_file}") down
-            log_success "Infrastructure stopped"
+            if [ $# -gt 0 ]; then
+                log_info "Stopping and removing infrastructure services ($*)..."
+                $(_compose_cmd "${compose_file}") rm -s -f -v "$@"
+                log_success "Infrastructure services ($*) stopped and removed"
+            else
+                log_info "Stopping infrastructure services..."
+                $(_compose_cmd "${compose_file}") down
+                log_success "Infrastructure stopped"
+            fi
+            ;;
+        stop)
+            if [ $# -gt 0 ]; then
+                log_info "Stopping infrastructure services ($*)..."
+                $(_compose_cmd "${compose_file}") stop "$@"
+                log_success "Infrastructure services ($*) stopped"
+            else
+                log_info "Stopping infrastructure services..."
+                $(_compose_cmd "${compose_file}") stop
+                log_success "Infrastructure stopped"
+            fi
             ;;
         restart)
-            log_info "Restarting infrastructure services..."
-            $(_compose_cmd "${compose_file}") restart
-            log_success "Infrastructure restarted"
+            if [ $# -gt 0 ]; then
+                log_info "Restarting infrastructure services ($*)..."
+                $(_compose_cmd "${compose_file}") restart "$@"
+                log_success "Infrastructure services ($*) restarted"
+            else
+                log_info "Restarting infrastructure services..."
+                $(_compose_cmd "${compose_file}") restart
+                log_success "Infrastructure restarted"
+            fi
             ;;
         *)
-            log_error "Usage: ./rsch infra <up|down|restart>"
+            log_error "Usage: ./rsch infra <up|down|stop|restart> [service...]"
             exit 1
             ;;
     esac
@@ -407,6 +455,7 @@ case "$COMMAND" in
     build)      cmd_build "$@" ;;
     up)         cmd_up "$@" ;;
     down)       cmd_down "$@" ;;
+    down-all-service) cmd_down_all_service "$@" ;;
     use)        cmd_use "$@" ;;
     run-app)    cmd_run_app "$@" ;;
     down-app)   cmd_down_app "$@" ;;
