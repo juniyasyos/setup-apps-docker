@@ -18,6 +18,7 @@ RUN apk add --no-cache \
       linux-headers \
       curl openssl \
       mariadb-client \
+      mariadb-connector-c \
       su-exec \
       $PHPIZE_DEPS \
   && cp /usr/share/zoneinfo/${TZ} /etc/localtime \

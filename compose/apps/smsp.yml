@@ -27,11 +27,13 @@ services:
       # Jangan true kalau public volume masih perlu diisi ke shared volume Nginx.
       SKIP_PUBLIC_SYNC: "false"
 
+      FILESYSTEM_DISK: s3
       AWS_ACCESS_KEY_ID: admin
       AWS_SECRET_ACCESS_KEY: password
       AWS_BUCKET: smsp
       AWS_URL: http://${HOST_IP:-localhost}:9090/smsp
       AWS_ENDPOINT: http://minio:9090
+      AWS_USE_PATH_STYLE_ENDPOINT: "true"
     volumes:
       - smsp_storage:/var/www/smsp/storage
       - smsp_bootstrap_cache:/var/www/smsp/bootstrap/cache
