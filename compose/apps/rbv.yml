@@ -18,6 +18,7 @@ services:
       PUBLIC_VOLUME: /var/www/rbv/public
       APP_URL: "http://${HOST_IP}:7300"
       TRUSTED_PROXIES: "*"
+      DB_CONNECTION: mysql
       DB_HOST: database-service
       DB_USERNAME: rbv_user
       DB_PASSWORD: rbv_pass123
