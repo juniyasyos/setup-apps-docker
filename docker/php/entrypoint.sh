@@ -133,48 +133,6 @@ if [ -f "./switch-auth-mode.sh" ]; then
     fi
 fi
 
-# Copy public assets to shared volume (only if PUBLIC_VOLUME is set and exists)
-# Skip if SKIP_PUBLIC_SYNC is true or if source and destination are the same
-if [ -n "${PUBLIC_VOLUME}" ] && [ -d "${PUBLIC_VOLUME}" ]; then
-    
-    # Check if we should skip sync
-    if [ "${SKIP_PUBLIC_SYNC}" = "true" ]; then
-        echo "ℹ️  SKIP_PUBLIC_SYNC=true, skipping public asset sync"
-    else
-        # Check if source and destination are the same
-        SOURCE_REAL=$(cd "${APP_WORKDIR}/public" 2>/dev/null && pwd || echo "${APP_WORKDIR}/public")
-        DEST_REAL=$(cd "${PUBLIC_VOLUME}" 2>/dev/null && pwd || echo "${PUBLIC_VOLUME}")
-        
-        if [ "${SOURCE_REAL}" = "${DEST_REAL}" ]; then
-            echo "ℹ️  Source and destination are the same (shared volume), skipping sync"
-        else
-            echo "📦 Syncing public assets to ${PUBLIC_VOLUME}..."
-            
-            # Create target directory if not exists
-            mkdir -p "${PUBLIC_VOLUME}"
-            
-            # Rsync or cp (rsync lebih efficient untuk update)
-            if command -v rsync >/dev/null 2>&1; then
-              # Run sync as www to avoid root-owned files in mounted volume
-              run_as_www rsync -a --delete "${APP_WORKDIR}/public/" "${PUBLIC_VOLUME}/" && 
-                echo "✅ Public assets synced via rsync" || echo "⚠️ rsync failed"
-            else
-              # Fallback to cp (run as www)
-              if [ -d "${PUBLIC_VOLUME}" ] && [ "$(ls -A ${PUBLIC_VOLUME} 2>/dev/null)" ]; then
-                rm -rf "${PUBLIC_VOLUME:?}"/*
-              fi
-              run_as_www cp -r "${APP_WORKDIR}/public/." "${PUBLIC_VOLUME}/" && 
-                echo "✅ Public assets copied" || echo "⚠️ cp failed"
-            fi
-            
-            # Set permissions for Caddy to read (ensure owned by www)
-            chown -R www:www "${PUBLIC_VOLUME}" 2>/dev/null || true
-            chmod -R 755 "${PUBLIC_VOLUME}" 2>/dev/null || true
-        fi
-    fi
-else
-    echo "ℹ️  PUBLIC_VOLUME not set or doesn't exist, skipping public sync"
-fi
 
 # Fix permissions BEFORE cache warming (penting!)
 echo "🔧 Setting up permissions..."
@@ -330,6 +288,38 @@ done
 
 echo "✅ IAM App ready at: $(date)"
 
+# Copy public assets to shared volume (only if PUBLIC_VOLUME is set and exists)
+# Do this AFTER cache warming and Livewire publishing so all assets are generated
+if [ -n "${PUBLIC_VOLUME}" ] && [ -d "${PUBLIC_VOLUME}" ]; then
+    if [ "${SKIP_PUBLIC_SYNC}" = "true" ]; then
+        echo "ℹ️  SKIP_PUBLIC_SYNC=true, skipping public asset sync"
+    else
+        SOURCE_REAL=$(cd "${APP_WORKDIR}/public" 2>/dev/null && pwd || echo "${APP_WORKDIR}/public")
+        DEST_REAL=$(cd "${PUBLIC_VOLUME}" 2>/dev/null && pwd || echo "${PUBLIC_VOLUME}")
+        
+        if [ "${SOURCE_REAL}" = "${DEST_REAL}" ]; then
+            echo "ℹ️  Source and destination are the same (shared volume), skipping sync"
+        else
+            echo "📦 Syncing public assets to ${PUBLIC_VOLUME}..."
+            mkdir -p "${PUBLIC_VOLUME}"
+            chown -R www:www "${PUBLIC_VOLUME}" 2>/dev/null || true
+            chmod -R 755 "${PUBLIC_VOLUME}" 2>/dev/null || true
+            if command -v rsync >/dev/null 2>&1; then
+              run_as_www rsync -a --delete "${APP_WORKDIR}/public/" "${PUBLIC_VOLUME}/" && 
+                echo "✅ Public assets synced via rsync" || echo "⚠️ rsync failed"
+            else
+              if [ -d "${PUBLIC_VOLUME}" ] && [ "$(ls -A ${PUBLIC_VOLUME} 2>/dev/null)" ]; then
+                rm -rf "${PUBLIC_VOLUME:?}"/* 2>/dev/null || true
+              fi
+              run_as_www cp -r "${APP_WORKDIR}/public/." "${PUBLIC_VOLUME}/" && 
+                echo "✅ Public assets copied" || echo "⚠️ cp failed"
+            fi
+        fi
+    fi
+else
+    echo "ℹ️  PUBLIC_VOLUME not set or doesn't exist, skipping public sync"
+fi
+
 # show minio configuration so we can inspect at runtime
 echo "🌐 Minio endpoint (AWS_ENDPOINT)=${AWS_ENDPOINT:-<unset>}"
 echo "🌐 Minio bucket (AWS_BUCKET)=${AWS_BUCKET:-<unset>}"
@@ -357,6 +347,18 @@ if command -v curl >/dev/null 2>&1; then
 else
     echo "⚠️  curl not available; skipping network check"
 fi
+
+# check language configuration
+echo "🌐 System Language (LANG)=${LANG:-<unset>}"
+echo "🔗 Testing language/locale availability via PHP..."
+php -r "
+    \$loc = '${LANG:-C}';
+    if (\$loc !== '' && setlocale(LC_ALL, \$loc) === false) {
+        echo '⚠️  Locale ' . \$loc . ' is not fully supported or generated' . PHP_EOL;
+    } else {
+        echo '✅ Locale ' . \$loc . ' is available and supported by PHP' . PHP_EOL;
+    }
+"
 
 # Verify APP_KEY is actually loaded by Laravel configuration (tinker check)
 echo "🔍 Verifying APP_KEY in Laravel configuration..."

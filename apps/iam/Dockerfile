@@ -201,7 +201,7 @@ WORKDIR ${APP_WORKDIR}
 
 COPY --from=builder --chown=www:www /build ${APP_WORKDIR}
 
-COPY docker/php/entrypoint-iam.sh /usr/local/bin/entrypoint.sh
+COPY docker/php/entrypoint.sh /usr/local/bin/entrypoint.sh
 
 RUN set -eux; \
     chmod +x /usr/local/bin/entrypoint.sh; \

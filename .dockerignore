@@ -91,7 +91,6 @@ build/
 # PHP / Composer
 # ------------------------------------------------------------
 vendor/
-**/vendor/
 
 composer.phar
 auth.json
