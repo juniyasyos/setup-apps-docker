@@ -18,6 +18,7 @@ services:
       PUBLIC_VOLUME: /var/www/lms/public
       APP_URL: "http://${HOST_IP}:7100"
       TRUSTED_PROXIES: "*"
+      DB_CONNECTION: mysql
       DB_HOST: database-service
       DB_USERNAME: lms_user
       DB_PASSWORD: lms_pass123
