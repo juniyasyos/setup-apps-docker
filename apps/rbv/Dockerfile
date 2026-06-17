@@ -207,7 +207,7 @@ RUN set -eux; \
       chmod -R 755 public || true; \
     fi
 
-COPY apps/rbv/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY docker/php/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 EXPOSE 9000
