@@ -3,6 +3,7 @@
 # Framework  : Laravel (PHP-FPM / Alpine)
 # Generated  : 2026-06-11 11:35:50
 # Generator  : rsch prepare (mode: dockerfile)
+# Optimized  : True
 # =============================================================================
 
 # ─────────────────────────────────────────
@@ -16,37 +17,66 @@ ARG TZ=Asia/Jakarta
 ARG APP_NAME="rbv"
 ARG APP_WORKDIR=/var/www/rbv
 
-RUN apk add --no-cache \
-      tzdata bash shadow ca-certificates unzip \
-      icu-dev oniguruma-dev libzip-dev zlib-dev \
-      libpng-dev libjpeg-turbo-dev freetype-dev \
-      libxml2-dev postgresql-dev \
-      linux-headers curl openssl \
-      $PHPIZE_DEPS \
-      vim \
-  && cp /usr/share/zoneinfo/${TZ} /etc/localtime \
-  && echo "${TZ}" > /etc/timezone \
-  && docker-php-ext-configure intl \
-  && docker-php-ext-configure gd --with-freetype --with-jpeg \
-  && docker-php-ext-install -j"$(nproc)" \
-       intl mbstring pdo pdo_mysql pdo_pgsql pgsql zip gd \
-       bcmath exif pcntl sockets opcache \
-  && pecl install apcu igbinary \
-  && docker-php-ext-enable apcu igbinary \
-  && apk del --no-network $PHPIZE_DEPS linux-headers \
-  && rm -rf /var/cache/apk/* /tmp/*
+ENV TZ=${TZ} \
+    APP_ENV=production \
+    PHP_MEMORY_LIMIT=512M \
+    PHP_OPCACHE_VALIDATE_TIMESTAMPS=0 \
+    APP_NAME=${APP_NAME}
 
-# Composer dari image resmi
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+RUN set -eux; \
+    apk add --no-cache \
+        tzdata \
+        bash \
+        shadow \
+        ca-certificates \
+        unzip \
+        curl \
+        openssl \
+        icu-libs \
+        oniguruma \
+        libzip \
+        zlib \
+        libpng \
+        libjpeg-turbo \
+        freetype \
+        libxml2 \
+        libpq \
+    ; \
+    apk add --no-cache --virtual .build-deps \
+        $PHPIZE_DEPS \
+        linux-headers \
+        icu-dev \
+        oniguruma-dev \
+        libzip-dev \
+        zlib-dev \
+        libpng-dev \
+        libjpeg-turbo-dev \
+        freetype-dev \
+        libxml2-dev \
+        postgresql-dev \
+    ; \
+    cp /usr/share/zoneinfo/${TZ} /etc/localtime; \
+    echo "${TZ}" > /etc/timezone; \
+    docker-php-ext-configure intl; \
+    docker-php-ext-configure gd --with-freetype --with-jpeg; \
+    docker-php-ext-install -j"$(nproc)" \
+        intl mbstring pdo pdo_mysql pdo_pgsql pgsql zip gd \
+        bcmath exif pcntl sockets opcache \
+    ; \
+    pecl install apcu igbinary; \
+    docker-php-ext-enable apcu igbinary; \
+    apk del --no-network .build-deps; \
+    rm -rf /var/cache/apk/* /tmp/* /usr/src/php* /root/.pearrc
 
 # User non-root untuk runtime
-RUN addgroup -g "${GID}" www \
-  && adduser -D -G www -u "${UID}" www \
-  && sed -ri 's/^user = .*/user = www/' /usr/local/etc/php-fpm.d/www.conf \
-  && sed -ri 's/^group = .*/group = www/' /usr/local/etc/php-fpm.d/www.conf
+RUN set -eux; \
+    addgroup -g "${GID}" www; \
+    adduser -D -G www -u "${UID}" www; \
+    sed -ri 's/^user = .*/user = www/' /usr/local/etc/php-fpm.d/www.conf; \
+    sed -ri 's/^group = .*/group = www/' /usr/local/etc/php-fpm.d/www.conf; \
+    sed -ri 's|^;?clear_env =.*|clear_env = no|' /usr/local/etc/php-fpm.d/www.conf
 
 WORKDIR ${APP_WORKDIR}
-ENV APP_NAME=${APP_NAME}
 
 # ─────────────────────────────────────────
 # Stage 2: Dependencies — composer install
@@ -54,31 +84,58 @@ ENV APP_NAME=${APP_NAME}
 FROM base AS deps
 
 ARG APP_DIR=rbv-app
-ENV COMPOSER_CACHE_DIR=/tmp/composer-cache \
-    COMPOSER_MEMORY_LIMIT=-1
 
-WORKDIR ${APP_WORKDIR}
+ENV COMPOSER_ALLOW_SUPERUSER=1 \
+    COMPOSER_CACHE_DIR=/tmp/composer-cache \
+    COMPOSER_MEMORY_LIMIT=-1 \
+    COMPOSER_NO_INTERACTION=1
 
-COPY . ./temp_context
+WORKDIR /build
+
+# Composer dari image resmi
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+# Copy only composer files first for caching
+COPY site/${APP_DIR}/composer.json site/${APP_DIR}/composer.lock* ./
 
 RUN set -eux; \
-    echo ">> Building for APP_DIR='${APP_DIR}'"; \
-    if [ -d "temp_context/site/${APP_DIR}" ]; then \
-      cp -r "temp_context/site/${APP_DIR}/." "./"; \
-    else \
-      cp -r "temp_context/." "./"; \
-    fi; \
-    rm -rf temp_context; \
     if [ -f composer.json ]; then \
       composer install \
         --no-dev \
         --prefer-dist \
         --no-interaction \
         --no-progress \
+        --no-scripts \
         --optimize-autoloader \
         --classmap-authoritative; \
     fi; \
-    rm -rf "$COMPOSER_CACHE_DIR" /tmp/*
+    rm -rf "$COMPOSER_CACHE_DIR" /root/.composer /tmp/*
+
+# Copy entire application code
+COPY site/${APP_DIR}/ ./
+
+# Finalize: dump autoloader and optimize, remove dev files
+RUN set -eux; \
+    rm -rf \
+        .git \
+        .github \
+        node_modules \
+        tests \
+        storage/logs/* \
+        storage/framework/cache/* \
+        storage/framework/sessions/* \
+        storage/framework/views/* \
+        bootstrap/cache/*.php \
+        .env \
+        .env.* \
+        npm-debug.log \
+        yarn-error.log \
+        pnpm-debug.log \
+    ; \
+    if [ -f composer.json ]; then \
+      composer dump-autoload --no-dev --optimize --classmap-authoritative --no-scripts 2>/dev/null || true; \
+    fi; \
+    rm -rf "$COMPOSER_CACHE_DIR" /root/.composer /tmp/*
 
 # ─────────────────────────────────────────
 # Stage 3: Runtime — Production
@@ -87,11 +144,12 @@ FROM base AS app
 
 ARG TZ=Asia/Jakarta
 ARG APP_NAME="rbv"
+ARG APP_WORKDIR=/var/www/rbv
 
 ENV APP_ENV=production \
-    PHP_OPCACHE_VALIDATE_TIMESTAMPS=0 \
-    PHP_MEMORY_LIMIT=512M \
-    APP_NAME=${APP_NAME}
+    APP_WORKDIR=${APP_WORKDIR}
+
+WORKDIR ${APP_WORKDIR}
 
 # PHP & FPM production tuning
 RUN set -eux; \
@@ -138,14 +196,13 @@ RUN set -eux; \
   sed -ri 's|^;?access\.log =.*|access.log = /proc/self/fd/2|' /usr/local/etc/php-fpm.d/www.conf
 
 # Copy app + vendor dari stage deps
-COPY --from=deps ${APP_WORKDIR} ${APP_WORKDIR}
+COPY --from=deps --chown=www:www /build ${APP_WORKDIR}
 
 # Permissions
 RUN set -eux; \
-    if [ -d storage ]; then \
-      chown -R www:www storage bootstrap/cache || true; \
-      chmod -R ug+rwX storage bootstrap/cache || true; \
-    fi; \
+    mkdir -p storage/app storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache; \
+    chown -R www:www storage bootstrap/cache || true; \
+    chmod -R ug+rwX storage bootstrap/cache || true; \
     if [ -d public ]; then \
       chmod -R 755 public || true; \
     fi

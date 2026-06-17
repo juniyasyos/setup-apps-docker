@@ -9,51 +9,83 @@ ARG GID=1000
 ARG TZ=Asia/Jakarta
 ARG APP_NAME="Smartpresence Deskripsi"
 
-# Install system dependencies and PHP extensions
-RUN apk add --no-cache \
-      tzdata bash shadow ca-certificates unzip \
-      icu-dev oniguruma-dev libzip-dev zlib-dev \
-      libpng-dev libjpeg-turbo-dev freetype-dev \
-      libxml2-dev postgresql-dev \
-      linux-headers \
-      curl openssl \
-      mariadb-client \
-      mariadb-connector-c \
-      su-exec \
-      $PHPIZE_DEPS \
-  && cp /usr/share/zoneinfo/${TZ} /etc/localtime \
-  && echo "${TZ}" > /etc/timezone \
-  && docker-php-ext-configure intl \
-  && docker-php-ext-configure gd --with-freetype --with-jpeg \
-  && docker-php-ext-install -j"$(nproc)" \
-      intl \
-      mbstring \
-      pdo \
-      pdo_mysql \
-      pdo_pgsql \
-      pgsql \
-      zip \
-      gd \
-      bcmath \
-      exif \
-      pcntl \
-      sockets \
-      opcache \
-  && pecl install igbinary apcu \
-  && docker-php-ext-enable igbinary apcu \
-  && apk del --no-network $PHPIZE_DEPS linux-headers \
-  && rm -rf /var/cache/apk/* /tmp/*
+ENV TZ=${TZ} \
+    APP_ENV=production \
+    PHP_MEMORY_LIMIT=512M \
+    PHP_OPCACHE_VALIDATE_TIMESTAMPS=0 \
+    APP_NAME=${APP_NAME}
 
-# Copy composer binary
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+# Install system dependencies and PHP extensions
+RUN set -eux; \
+    apk add --no-cache \
+        tzdata \
+        bash \
+        shadow \
+        ca-certificates \
+        unzip \
+        curl \
+        openssl \
+        su-exec \
+        mariadb-client \
+        mariadb-connector-c \
+        libpq \
+        icu-libs \
+        oniguruma \
+        libzip \
+        zlib \
+        libpng \
+        libjpeg-turbo \
+        freetype \
+        libxml2 \
+    ; \
+    apk add --no-cache --virtual .build-deps \
+        $PHPIZE_DEPS \
+        linux-headers \
+        icu-dev \
+        oniguruma-dev \
+        libzip-dev \
+        zlib-dev \
+        libpng-dev \
+        libjpeg-turbo-dev \
+        freetype-dev \
+        libxml2-dev \
+        postgresql-dev \
+    ; \
+    cp /usr/share/zoneinfo/${TZ} /etc/localtime; \
+    echo "${TZ}" > /etc/timezone; \
+    docker-php-ext-configure intl; \
+    docker-php-ext-configure gd --with-freetype --with-jpeg; \
+    docker-php-ext-install -j"$(nproc)" \
+        intl \
+        mbstring \
+        pdo \
+        pdo_mysql \
+        pdo_pgsql \
+        pgsql \
+        zip \
+        gd \
+        bcmath \
+        exif \
+        pcntl \
+        sockets \
+        opcache \
+    ; \
+    pecl install igbinary apcu; \
+    docker-php-ext-enable igbinary apcu; \
+    apk del --no-network .build-deps; \
+    rm -rf \
+        /var/cache/apk/* \
+        /tmp/* \
+        /usr/src/php* \
+        /root/.pearrc
 
 # Create non-root user
-RUN addgroup -g "${GID}" www \
-  && adduser -D -G www -u "${UID}" www \
-  && sed -ri 's/^user = .*/user = www/' /usr/local/etc/php-fpm.d/www.conf \
-  && sed -ri 's/^group = .*/group = www/' /usr/local/etc/php-fpm.d/www.conf
-
-ENV APP_NAME=${APP_NAME}
+RUN set -eux; \
+    addgroup -g "${GID}" www; \
+    adduser -D -G www -u "${UID}" www; \
+    sed -ri 's/^user = .*/user = www/' /usr/local/etc/php-fpm.d/www.conf; \
+    sed -ri 's/^group = .*/group = www/' /usr/local/etc/php-fpm.d/www.conf; \
+    sed -ri 's|^;?clear_env =.*|clear_env = no|' /usr/local/etc/php-fpm.d/www.conf
 
 # ============================================
 # Stage 2: Build & Dependencies
@@ -62,11 +94,15 @@ FROM base AS builder
 
 ARG APP_DIR=
 
-ENV COMPOSER_CACHE_DIR=/tmp/composer-cache \
+ENV COMPOSER_ALLOW_SUPERUSER=1 \
+    COMPOSER_CACHE_DIR=/tmp/composer-cache \
     COMPOSER_MEMORY_LIMIT=-1 \
     COMPOSER_NO_INTERACTION=1
 
 WORKDIR /build
+
+# Copy composer binary only in builder
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 # Copy only composer files first (better caching)
 COPY site/${APP_DIR}/composer.json site/${APP_DIR}/composer.lock* ./
@@ -81,13 +117,29 @@ RUN set -eux; \
       --no-scripts \
       --optimize-autoloader \
       --classmap-authoritative; \
-    rm -rf "$COMPOSER_CACHE_DIR"
+    rm -rf "$COMPOSER_CACHE_DIR" /root/.composer /tmp/*
 
 # Copy entire application code
 COPY site/${APP_DIR}/ ./
 
-# Finalize: dump autoloader and optimize
+# Finalize: dump autoloader and optimize, clean up dev files
 RUN set -eux; \
+    rm -rf \
+        .git \
+        .github \
+        node_modules \
+        tests \
+        storage/logs/* \
+        storage/framework/cache/* \
+        storage/framework/sessions/* \
+        storage/framework/views/* \
+        bootstrap/cache/*.php \
+        .env \
+        .env.* \
+        npm-debug.log \
+        yarn-error.log \
+        pnpm-debug.log \
+    ; \
     composer dump-autoload --optimize --classmap-authoritative --no-scripts 2>/dev/null || true; \
     # Clear any potential config caches created during composer commands
     if [ -f artisan ]; then \
@@ -97,9 +149,8 @@ RUN set -eux; \
       echo "✅ Livewire verified"; \
     else \
       echo "⚠️ Livewire not found in dependencies"; \
-    fi
-
-# ============================================
+    fi; \
+    rm -rf "$COMPOSER_CACHE_DIR" /root/.composer /tmp/*
 
 # ============================================
 # Stage 3: Runtime (Final Image)
@@ -164,6 +215,7 @@ COPY --from=builder --chown=www:www /build ${APP_WORKDIR}
 
 # Setup Laravel directories and permissions
 RUN set -eux; \
+    mkdir -p storage/app storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache; \
     chown -R www:www storage bootstrap/cache; \
     chmod -R ug+rwX storage bootstrap/cache; \
     chmod -R 775 storage/framework/views; \
