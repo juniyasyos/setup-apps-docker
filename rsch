@@ -102,7 +102,7 @@ COMMANDS:
     up [--dev|--prod]   Start all services
     down [--dev|--prod] Stop all services
     down-all-service    Stop all apps and infrastructure
-    use <dev|prod>      Set global environment mode
+    use <dev|prod|local> Set global environment mode
     run-app <app>...    Start specific app(s) (e.g. run-app siimut ikp)
     down-app <app>...   Stop specific app(s). Add -v to remove volumes
     restart <app>       Restart a specific app service
@@ -275,7 +275,7 @@ cmd_down_all_service() {
 
 # ──────────────────────────────────────────────
 # Use — set global environment mode
-# Usage: ./rsch use dev|prod
+# Usage: ./rsch use dev|prod|local
 # ──────────────────────────────────────────────
 cmd_use() {
     local mode="${1:-}"

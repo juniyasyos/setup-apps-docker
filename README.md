@@ -16,29 +16,37 @@ Platform ini menggunakan jaringan internal terisolasi (`rsch-apps_default`). Ngi
 
 ```mermaid
 graph TD
-    Client[Klien / Browser] -->|Port 80/443| Nginx[Nginx Reverse Proxy <br> container: multi-web]
-    
-    subgraph Jaringan Aplikasi (172.20.0.0/16)
-        Nginx -->|siimut.local| SIIMUT[SIIMUT App]
-        Nginx -->|iam.local| IAM[IAM Server SSO]
-        Nginx -->|ikp.local| IKP[IKP App]
-        Nginx -->|lms.local| LMS[LMS App]
-        Nginx -->|smsp.local| SMSP[SMSP Backend]
-        Nginx -->|port 7250| FESMSP[FE-SMSP React]
-        Nginx -->|port 7300| RBV[RBV App]
-        
-        SIIMUT & IKP & IAM & SMSP & RBV & LMS -->|Koneksi DB| MySQL[(MySQL 8.0 <br> database-service)]
-        SIIMUT & IKP & IAM -->|Object Storage S3| MinIO[(MinIO S3 Engine)]
+    Client["Klien / Browser"] -->|"Port 80/443"| Nginx["Nginx Reverse Proxy<br/>container: multi-web"]
+
+    subgraph NET["Jaringan Aplikasi 172.20.0.0/16"]
+        Nginx -->|"siimut.local"| SIIMUT["SIIMUT App"]
+        Nginx -->|"iam.local"| IAM["IAM Server SSO"]
+        Nginx -->|"ikp.local"| IKP["IKP App"]
+        Nginx -->|"lms.local"| LMS["LMS App"]
+        Nginx -->|"smsp.local"| SMSP["SMSP Backend"]
+        Nginx -->|"port 7250"| FESMSP["FE-SMSP React"]
+        Nginx -->|"port 7300"| RBV["RBV App"]
+
+        SIIMUT -->|"Koneksi DB"| MySQL[("MySQL 8.0<br/>database-service")]
+        IKP -->|"Koneksi DB"| MySQL
+        IAM -->|"Koneksi DB"| MySQL
+        SMSP -->|"Koneksi DB"| MySQL
+        RBV -->|"Koneksi DB"| MySQL
+        LMS -->|"Koneksi DB"| MySQL
+
+        SIIMUT -->|"Object Storage S3"| MinIO[("MinIO S3 Engine")]
+        IKP -->|"Object Storage S3"| MinIO
+        IAM -->|"Object Storage S3"| MinIO
     end
-    
-    subgraph Layanan Administrator
-        MySQL --- phpMyAdmin[phpMyAdmin <br> port: 8888]
+
+    subgraph ADMIN["Layanan Administrator"]
+        MySQL --- phpMyAdmin["phpMyAdmin<br/>port: 8888"]
     end
 
     classDef appNode fill:#f9f,stroke:#333,stroke-width:2px;
     classDef dbNode fill:#9f9,stroke:#333,stroke-width:2px;
     classDef proxyNode fill:#bbf,stroke:#333,stroke-width:2px;
-    
+
     class SIIMUT,IKP,IAM,LMS,SMSP,FESMSP,RBV appNode;
     class MySQL,MinIO dbNode;
     class Nginx proxyNode;
