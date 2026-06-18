@@ -15,7 +15,7 @@ rsch-apps/
 ├── docker/                          # Low-level service and container runtimes configs
 ├── env/                             # Environment variables & runtime secrets (Gitignored)
 ├── scripts/                         # Command utilities, health checkers, & maintenance scripts
-├── sources/                         # Raw application source code directories (Gitignored)
+├── site/                         # Raw application source code directories (Gitignored)
 ├── storage/                         # Local mount directories for persistent database/storage files
 │
 ├── compose.yml                      # Main Compose aggregator manifest
@@ -131,10 +131,10 @@ scripts/
 
 ---
 
-## 🔒 Storage, Sources, & Variables Segregation
+## 🔒 Storage, site, & Variables Segregation
 
-### `sources/` (Gitignored)
-Folder ini menampung seluruh *source code* (kode sumber) aplikasi hasil pull dari Git (contoh: `sources/siimut`, `sources/iam-server`). Folder ini akan langsung di-*mount* ke dalam kontainer jika aplikasi berjalan pada environment lokal, memastikan setiap *save* file akan langsung merefresh kontainer.
+### `site/` (Gitignored)
+Folder ini menampung seluruh *source code* (kode sumber) aplikasi hasil pull dari Git (contoh: `site/siimut`, `site/iam-server`). Folder ini akan langsung di-*mount* ke dalam kontainer jika aplikasi berjalan pada environment lokal, memastikan setiap *save* file akan langsung merefresh kontainer.
 
 ### `storage/` (Gitignored)
 Data vital aplikasi disimpan secara persisten di folder host ini, sehingga file fisik tidak akan hilang walaupun seluruh Docker container dan image dihapus (contoh: `./rsch down` atau `./rsch infra down`).
