@@ -48,7 +48,7 @@ services:
     environment:
       - MINIO_ROOT_USER=${MINIO_ROOT_USER:-admin}
       - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-password}
-      - MINIO_BUCKETS=${MINIO_BUCKETS:-siimut,ikp,data-center,smsp}
+      - MINIO_BUCKETS=${MINIO_BUCKETS:-siimut,ikp,data-center,smsp,rbv,lms}
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
