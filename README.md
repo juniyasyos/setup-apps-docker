@@ -15,41 +15,89 @@ Platform ini mengintegrasikan Nginx reverse proxy, basis data terpusat, object s
 Platform ini menggunakan jaringan internal terisolasi (`rsch-apps_default`). Nginx bertindak sebagai gerbang utama (*Reverse Proxy*) yang merutekan domain/host langsung menuju kontainer aplikasi masing-masing, sementara servis *backend* seperti MySQL dan MinIO aman di latar belakang.
 
 ```mermaid
-graph TD
-    Client["Klien / Browser"] -->|"Port 80/443"| Nginx["Nginx Reverse Proxy<br/>container: multi-web"]
-
-    subgraph NET["Jaringan Aplikasi 172.20.0.0/16"]
-        Nginx -->|"siimut.local"| SIIMUT["SIIMUT App"]
-        Nginx -->|"iam.local"| IAM["IAM Server SSO"]
-        Nginx -->|"ikp.local"| IKP["IKP App"]
-        Nginx -->|"lms.local"| LMS["LMS App"]
-        Nginx -->|"smsp.local"| SMSP["SMSP Backend"]
-        Nginx -->|"port 7250"| FESMSP["FE-SMSP React"]
-        Nginx -->|"port 7300"| RBV["RBV App"]
-
-        SIIMUT -->|"Koneksi DB"| MySQL[("MySQL 8.0<br/>database-service")]
-        IKP -->|"Koneksi DB"| MySQL
-        IAM -->|"Koneksi DB"| MySQL
-        SMSP -->|"Koneksi DB"| MySQL
-        RBV -->|"Koneksi DB"| MySQL
-        LMS -->|"Koneksi DB"| MySQL
-
-        SIIMUT -->|"Object Storage S3"| MinIO[("MinIO S3 Engine")]
-        IKP -->|"Object Storage S3"| MinIO
-        IAM -->|"Object Storage S3"| MinIO
+flowchart TB
+    Client("🌐 Klien / Browser")
+    
+    subgraph Proxy["Reverse Proxy Layer"]
+        Nginx{"Nginx Reverse Proxy<br/>(multi-web)"}
     end
 
-    subgraph ADMIN["Layanan Administrator"]
-        MySQL --- phpMyAdmin["phpMyAdmin<br/>port: 8888"]
+    subgraph Network["Docker Bridge Network (rsch-apps_default - 172.20.0.0/16)"]
+        
+        subgraph Apps["🚀 Application Services"]
+            direction TB
+            IAM["🛡️ IAM Server SSO<br/>(iam.local)"]
+            SIIMUT["🏥 SIIMUT App<br/>(siimut.local)"]
+            IKP["📝 IKP App<br/>(ikp.local)"]
+            LMS["📚 LMS App<br/>(lms.local)"]
+            RBV["🏥 RBV App<br/>(port 7300)"]
+            
+            subgraph SMSP_Stack["SMSP Stack"]
+                FESMSP["💻 FE-SMSP React<br/>(port 7250)"]
+                SMSP["⚙️ SMSP Backend<br/>(smsp.local)"]
+            end
+        end
+
+        subgraph Background["⚙️ Background Tasks"]
+            Queue["🔄 Queue Workers"]
+            Cron["⏱️ Schedulers"]
+        end
+
+        subgraph Infra["🗄️ Core Infrastructure"]
+            direction LR
+            MySQL[("🐬 MySQL 8.0<br/>(database-service)")]
+            MinIO[("🪣 MinIO Storage<br/>(S3 Engine)")]
+        end
     end
 
-    classDef appNode fill:#f9f,stroke:#333,stroke-width:2px;
-    classDef dbNode fill:#9f9,stroke:#333,stroke-width:2px;
-    classDef proxyNode fill:#bbf,stroke:#333,stroke-width:2px;
+    subgraph Admin["🛠️ Layanan Administrator"]
+        PMA["⚙️ phpMyAdmin<br/>(Port: 8888)"]
+    end
 
-    class SIIMUT,IKP,IAM,LMS,SMSP,FESMSP,RBV appNode;
+    %% Routing / Ingress
+    Client == "HTTP/HTTPS<br/>Port 80/443" ==> Nginx
+    
+    Nginx -.->|"Routing HTTP/Proxy"| SIIMUT
+    Nginx -.-> IKP
+    Nginx -.-> LMS
+    Nginx -.-> RBV
+    Nginx -.-> IAM
+    Nginx -.-> SMSP
+    Nginx -.-> FESMSP
+
+    %% Frontend to Backend API
+    FESMSP -.->|"API Calls"| SMSP
+
+    %% SSO Connections (IAM)
+    SIIMUT & IKP & LMS -.->|"SSO Auth"| IAM
+
+    %% Database Connections
+    SIIMUT & IKP & LMS & RBV & SMSP & IAM ===>|"Port 3306"| MySQL
+    
+    %% S3 Connections
+    SIIMUT & IKP & IAM ===>|"Port 9000 (S3 API)"| MinIO
+    
+    %% Background tasks
+    Queue & Cron -.- Apps
+    Queue & Cron -.- MySQL
+    
+    %% Admin Panels
+    PMA ---|"Manage DB"| MySQL
+
+    %% Styling
+    classDef proxyLayer fill:#1f2937,stroke:#4ade80,stroke-width:3px,color:#fff;
+    classDef appNode fill:#3b82f6,stroke:#1e40af,stroke-width:2px,color:#fff;
+    classDef dbNode fill:#10b981,stroke:#047857,stroke-width:2px,color:#fff;
+    classDef ssoNode fill:#8b5cf6,stroke:#5b21b6,stroke-width:3px,color:#fff;
+    classDef bgNode fill:#f59e0b,stroke:#b45309,stroke-width:2px,color:#fff;
+    classDef adminNode fill:#ef4444,stroke:#b91c1c,stroke-width:2px,color:#fff;
+
+    class Nginx proxyLayer;
+    class SIIMUT,IKP,LMS,SMSP,FESMSP,RBV appNode;
+    class IAM ssoNode;
     class MySQL,MinIO dbNode;
-    class Nginx proxyNode;
+    class Queue,Cron bgNode;
+    class PMA adminNode;
 ```
 
 ---
