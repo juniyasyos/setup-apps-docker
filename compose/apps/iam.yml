@@ -31,7 +31,7 @@ services:
       - iam_storage:/var/www/iam/storage
       - iam_bootstrap_cache:/var/www/iam/bootstrap/cache
       - iam_public:/var/www/public-shared
-      - ../../../../apps/auth-server/public/build:/var/www/iam/public/build
+
     deploy:
       resources:
         limits:
