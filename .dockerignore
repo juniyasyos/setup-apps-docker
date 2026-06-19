@@ -78,14 +78,14 @@ yarn-error.log*
 pnpm-debug.log*
 
 dist/
-build/
+# build/
 **/dist/
-**/build/
+# **/build/
 
 # Kalau Laravel/Vite build public/build ingin dibuat di image,
 # jangan copy dari host. Build ulang di Dockerfile kalau perlu.
-**/public/build/
-**/public/hot
+# **/public/build/
+# **/public/hot
 
 # ------------------------------------------------------------
 # PHP / Composer
