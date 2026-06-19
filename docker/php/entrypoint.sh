@@ -389,6 +389,17 @@ while [ $CHECK_COUNT -lt $MAX_CHECKS ]; do
     sleep 1
 done
 
+# Verify public build assets
+echo "🔍 Checking for critical public build assets..."
+if [ -f "public/build/manifest.json" ]; then
+    echo "✅ Vite build manifest found (public/build/manifest.json)"
+elif [ -f "public/mix-manifest.json" ]; then
+    echo "✅ Mix build manifest found (public/mix-manifest.json)"
+else
+    echo "⚠️  WARNING: No build manifest (Vite/Mix) found in public directory."
+    echo "   Frontend assets may not have been compiled correctly!"
+fi
+
 # Execute main command
 if [ $# -eq 0 ]; then
     set -- php-fpm -F

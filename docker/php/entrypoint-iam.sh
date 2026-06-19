@@ -1,5 +1,5 @@
 #!/bin/sh
-set -e
+set -eo pipefail
 
 echo "🚀 Starting IAM Application (Registry Mode with runtime deps)"
 
@@ -12,6 +12,8 @@ cd "${APP_WORKDIR}"
 
 # ------------------------------------------------------------------
 # dynamic .env generation
+# build a fresh .env from whatever environment variables are present
+# this lets us push the same image and configure everything at runtime
 # ------------------------------------------------------------------
 echo "🧩 Generating .env from runtime environment variables"
 
@@ -22,31 +24,49 @@ else
     : > .env
 fi
 
+# helper that inserts or replaces a key in the file
 set_env() {
     local key="$1" value="$2"
     if grep -q "^${key}=" .env 2>/dev/null; then
         sed -i "s~^${key}=.*~${key}=${value}~" .env
     else
+        # Ensure trailing newline before appending to avoid corrupting last line
+        if [ -s .env ] && [ "$(tail -c1 .env | xxd -p)" != "0a" ]; then
+            echo >> .env
+        fi
         printf '%s=%s\n' "$key" "$value" >> .env
     fi
 }
 
-for var in APP_ENV APP_WORKDIR PUBLIC_VOLUME APP_URL IAM_ISSUER IAM_JWT_SECRET DB_HOST DB_USERNAME DB_PASSWORD DB_DATABASE SKIP_PUBLIC_SYNC AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_BUCKET AWS_URL AWS_ENDPOINT USE_SSO IAM_ENABLED SESSION_DRIVER SESSION_DOMAIN SESSION_PATH SESSION_SECURE_COOKIE SESSION_SAME_SITE; do
-    eval val=\${$var}
-    if [ -n "$val" ]; then
+# helper for running commands as the www user when available
+run_as_www() {
+    if command -v su-exec >/dev/null 2>&1; then
+        su-exec www "$@"
+    elif command -v gosu >/dev/null 2>&1; then
+        gosu www "$@"
+    elif [ "$(id -u)" = "0" ] && command -v su >/dev/null 2>&1; then
+        su -s /bin/sh www -c "$(printf '%s ' "$@")"
+    else
+        "$@"
+    fi
+}
+
+# list of variables we care about (add more as needed)
+for var in \
+    APP_ENV APP_WORKDIR PUBLIC_VOLUME APP_URL IAM_ISSUER IAM_JWT_SECRET \
+    DB_HOST DB_USERNAME DB_PASSWORD DB_DATABASE SKIP_PUBLIC_SYNC \
+    AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_BUCKET AWS_URL AWS_ENDPOINT \
+    USE_SSO IAM_ENABLED SESSION_DRIVER SESSION_DOMAIN SESSION_PATH \
+    SESSION_SECURE_COOKIE SESSION_SAME_SITE; do
+    # Write variable to .env when it exists in runtime env, including empty values
+    eval "is_set=\${${var}+x}"
+    if [ "$is_set" = "x" ]; then
+        eval "val=\${$var}"
         set_env "$var" "$val"
     fi
 done
 
 echo "✅ .env assembled"
-
-# -----------------------------------------------------
-# runtime dependency install removed: handled at build-time
-# ------------------------------------------------------------------
-# composer/npm install & build are executed during image build to
-# ensure the image already contains all dependencies and compiled assets.
-# keeping them here would rebuild on every container start and cause
-# problems with volume mounts and cache invalidation.
 
 # Validate Laravel
 if [ ! -f artisan ]; then
@@ -66,88 +86,134 @@ if [ ! -f ".env" ]; then
     fi
 fi
 
-# rest of original entrypoint-registry functionality follows (sync public, db wait...)
-
-# Run switch-auth-mode.sh if exists (for SIIMUT)
-if [ -f "./switch-auth-mode.sh" ]; then
-    echo "🔐 Setting authentication mode..."
-    chmod +x ./switch-auth-mode.sh
-    ./switch-auth-mode.sh dev || echo "⚠️ switch-auth-mode.sh failed (continuing...)"
+# Unset APP_KEY from OS environment if it's empty so Laravel reads from .env instead
+if [ -z "$APP_KEY" ]; then
+    unset APP_KEY
 fi
 
-# Copy public assets to shared volume (only if PUBLIC_VOLUME is set and exists)
-if [ -n "${PUBLIC_VOLUME}" ] && [ -d "${PUBLIC_VOLUME}" ]; then
-    if [ "${SKIP_PUBLIC_SYNC}" = "true" ]; then
-        echo "ℹ️  SKIP_PUBLIC_SYNC=true, skipping public asset sync"
+# Ensure APP_KEY is set (generate if missing, empty, or just "base64:")
+if ! grep -q "^APP_KEY=" .env; then
+    echo "APP_KEY=" >> .env
+fi
+
+APP_KEY_VALUE=$(grep -E '^APP_KEY=' .env | head -1 | cut -d'=' -f2- | tr -d '\r' || true)
+if [ -z "${APP_KEY_VALUE}" ] || [ "${APP_KEY_VALUE}" = "base64:" ] || [ "${#APP_KEY_VALUE}" -le 10 ]; then
+    echo "🔐 Generating APP_KEY..."
+    rm -f bootstrap/cache/config.php 2>/dev/null || true
+    # Unset APP_KEY from OS environment if it's empty so artisan reads from .env instead of docker env
+    unset APP_KEY
+    php artisan key:generate --force
+fi
+
+# Run switch-auth-mode.sh if exists
+if [ -f "./switch-auth-mode.sh" ]; then
+    if [ "${USE_SSO}" = "true" ] || [ "${IAM_ENABLED}" = "true" ]; then
+        echo "ℹ️ SSO enabled, skipping switch-auth-mode.sh to preserve runtime IAM/session configuration"
     else
-        SOURCE_REAL=$(cd "${APP_WORKDIR}/public" 2>/dev/null && pwd || echo "${APP_WORKDIR}/public")
-        DEST_REAL=$(cd "${PUBLIC_VOLUME}" 2>/dev/null && pwd || echo "${PUBLIC_VOLUME}")
-        if [ "${SOURCE_REAL}" = "${DEST_REAL}" ]; then
-            echo "ℹ️  Source and destination are the same (shared volume), skipping sync"
-        else
-            echo "📦 Syncing public assets to ${PUBLIC_VOLUME}..."
-            mkdir -p "${PUBLIC_VOLUME}"
-            if command -v rsync >/dev/null 2>&1; then
-                rsync -a --delete "${APP_WORKDIR}/public/" "${PUBLIC_VOLUME}/"
-                echo "✅ Public assets synced via rsync"
-            else
-                if [ -d "${PUBLIC_VOLUME}" ] && [ "$(ls -A ${PUBLIC_VOLUME} 2>/dev/null)" ]; then
-                    rm -rf "${PUBLIC_VOLUME:?}/*"
-                fi
-                cp -r "${APP_WORKDIR}/public/." "${PUBLIC_VOLUME}/"
-                echo "✅ Public assets copied"
-            fi
-            chmod -R 755 "${PUBLIC_VOLUME}"
+        echo "🔐 Setting authentication mode..."
+        chmod +x ./switch-auth-mode.sh
+        AUTH_MODE="dev"
+        if [ "${APP_ENV}" = "production" ]; then
+            AUTH_MODE="prod"
         fi
+        echo "ℹ️ Selected auth mode: ${AUTH_MODE} (USE_SSO=${USE_SSO:-}, IAM_ENABLED=${IAM_ENABLED:-}, APP_ENV=${APP_ENV:-})"
+        ./switch-auth-mode.sh "${AUTH_MODE}" || echo "⚠️ switch-auth-mode.sh failed (continuing...)"
     fi
-else
-    echo "ℹ️  PUBLIC_VOLUME not set or doesn't exist, skipping public sync"
 fi
 
 # Fix permissions BEFORE cache warming (penting!)
 echo "🔧 Setting up permissions..."
-# Ensure required folders exist even if storage/ is not committed or overridden by a mount
-mkdir -p storage storage/framework/cache storage/framework/sessions storage/framework/views
-mkdir -p storage/logs storage/app/public
-mkdir -p bootstrap/cache
+mkdir -p storage/framework/cache/data \
+         storage/framework/sessions \
+         storage/framework/views \
+         storage/framework/testing \
+         storage/logs \
+         storage/app/public \
+         bootstrap/cache
 
 # Ensure Laravel log file exists and is writable (prevents "Permission denied" on first write)
 touch storage/logs/laravel.log
 
-# Create public/livewire symlink if not exists (Livewire asset serving)
-if [ ! -L public/livewire ]; then
-  if [ -d public/vendor/livewire ]; then
-    ln -s vendor/livewire public/livewire
-    echo "✅ Created symlink: public/livewire -> vendor/livewire"
-  else
-    echo "📦 Publishing Livewire assets..."
-    if ! su-exec www php artisan livewire:publish --assets 2>&1 | tee /tmp/livewire-publish.log; then
-      echo "⚠️ livewire:publish had issues. See log above."
+# Remove stale bootstrap cache from previous builds that may reference dev-only providers
+echo "🧹 Clearing stale bootstrap cache files..."
+rm -f bootstrap/cache/services.php bootstrap/cache/packages.php bootstrap/cache/config.php bootstrap/cache/routes-v7.php bootstrap/cache/events.php bootstrap/cache/modules.php bootstrap/cache/settings.php 2>/dev/null || true
+
+# Publish and verify Livewire assets (CRITICAL - do this BEFORE symlink)
+if [ -d vendor/livewire/livewire ]; then
+  echo "📦 Ensuring Livewire assets are published..."
+
+  LIVEWIRE_MAX_RETRIES=3
+  LIVEWIRE_RETRY_COUNT=0
+  LIVEWIRE_PUBLISHED=0
+
+  while [ $LIVEWIRE_RETRY_COUNT -lt $LIVEWIRE_MAX_RETRIES ] && [ $LIVEWIRE_PUBLISHED -eq 0 ]; do
+    LIVEWIRE_RETRY_COUNT=$((LIVEWIRE_RETRY_COUNT + 1))
+    
+    # Check if assets already exist
+    if [ -d public/vendor/livewire ] && [ -f public/vendor/livewire/livewire.min.js ]; then
+      echo "✅ Livewire assets already present"
+      LIVEWIRE_PUBLISHED=1
+      break
     fi
     
-    # Check if assets were published
-    if [ -d public/vendor/livewire ]; then
-      ln -s vendor/livewire public/livewire
-      echo "✅ Livewire assets published and symlink created"
+    # Attempt to publish
+    echo "  🔄 Attempt $LIVEWIRE_RETRY_COUNT/$LIVEWIRE_MAX_RETRIES: Running livewire:publish..."
+    if run_as_www php artisan livewire:publish --assets 2>&1 | tee /tmp/livewire-publish.log; then
+      echo "  ✓ Publish command succeeded"
     else
-      # Try alternative: vendor/bin/livewire if available
-      if [ -f vendor/bin/livewire ]; then
-        echo "🔄 Trying alternative livewire publish method..."
-        su-exec www vendor/bin/livewire publish --assets || true
+      echo "  ⚠️ Publish command had exit code > 0"
+    fi
+    
+    # Verify assets exist after publish attempt
+    if [ -d public/vendor/livewire ] && [ -f public/vendor/livewire/livewire.min.js ]; then
+      echo "  ✅ Livewire assets verified at public/vendor/livewire/"
+      LIVEWIRE_PUBLISHED=1
+      break
+    elif [ -d public/vendor/livewire ]; then
+      echo "  ⚠️ Directory exists but livewire.min.js missing. Contents:"
+      ls -la public/vendor/livewire/ | head -5
+    else
+      echo "  ❌ public/vendor/livewire directory not found"
+      
+      # Debug: show what's in public/vendor/
+      if [ -d public/vendor ]; then
+        echo "  📋 Available in public/vendor: $(ls -1 public/vendor/ 2>/dev/null | tr '\n' ' ')"
+      else
+        echo "  📋 public/vendor directory does not exist"
       fi
       
-      # Final check
-      if [ -d public/vendor/livewire ]; then
-        ln -s vendor/livewire public/livewire
-        echo "✅ Livewire assets published (alternative method)"
-      else
-        echo "❌ ERROR: Livewire assets could not be published!"
-        echo "📋 Available vendor dirs: $(ls -1 public/vendor 2>/dev/null | head -5)"
-        echo "📋 Check /tmp/livewire-publish.log for details"
+      # Try alternative method
+      if [ $LIVEWIRE_RETRY_COUNT -eq 1 ] && [ -f vendor/bin/livewire ]; then
+        echo "  🔄 Trying vendor/bin/livewire (alternative)..."
+        run_as_www vendor/bin/livewire publish --assets 2>&1 || echo "  ⚠️ Alternative method also failed"
       fi
     fi
+    
+    # Wait before retry
+    if [ $LIVEWIRE_RETRY_COUNT -lt $LIVEWIRE_MAX_RETRIES ] && [ $LIVEWIRE_PUBLISHED -eq 0 ]; then
+      echo "  ⏳ Waiting 2 seconds before retry..."
+      sleep 2
+    fi
+  done
+
+  # Create symlink (only if assets are actually present)
+  if [ -d public/vendor/livewire ]; then
+    if [ ! -L public/livewire ]; then
+      rm -f public/livewire  # Remove if it's a regular directory
+      ln -s vendor/livewire public/livewire
+      echo "✅ Created symlink: public/livewire -> vendor/livewire"
+    else
+      echo "✅ Symlink public/livewire -> vendor/livewire already exists"
+    fi
+  else
+    echo "❌ CRITICAL: Livewire assets could not be published after $LIVEWIRE_MAX_RETRIES attempts!"
+    echo "📋 Check /tmp/livewire-publish.log for details"
+    echo "This will cause Livewire 404 errors in the application!"
+    # Don't exit - let app start anyway, but log the issue
   fi
-fi 
+else
+  echo "ℹ️ Livewire is not installed, skipping asset publication"
+fi
 
 # Clear stale cache files yang mungkin corrupt atau orphaned
 echo "🧹 Cleaning stale cache files..."
@@ -155,10 +221,20 @@ rm -rf storage/framework/views/* 2>/dev/null || true
 rm -rf storage/framework/cache/data/* 2>/dev/null || true
 rm -rf bootstrap/cache/*.php 2>/dev/null || true
 
-# Set ownership dan permission
+# Set ownership dan permission - CRITICAL FIX!
+# Run TANPA if [ -d storage ] check agar selalu di-execute
+echo "  Setting ownership to www:www..."
 chown -R www:www storage bootstrap/cache 2>/dev/null || true
+echo "  Setting write permissions..."
 chmod -R ug+rwX storage bootstrap/cache 2>/dev/null || true
 chmod 664 storage/logs/laravel.log 2>/dev/null || true
+
+# Verify permissions were set correctly
+if [ ! -w storage/framework/cache ]; then
+  echo "⚠️  WARNING: storage/framework/cache is still not writable after chmod!"
+  echo "   Current ownership: $(ls -ld storage/framework/cache | awk '{print $3":"$4}')"
+  echo "   Current permissions: $(ls -ld storage/framework/cache | awk '{print $1}')"
+fi
 
 echo "✅ Permissions set"
 
@@ -167,23 +243,27 @@ echo "⚙️  Warming Laravel caches..."
 
 # Clear all caches first to prevent stale/corrupted cache issues
 echo "🧹 Clearing all caches..."
-su-exec www php artisan cache:clear    >/dev/null 2>&1 || true
-su-exec www php artisan config:clear   >/dev/null 2>&1 || true
-su-exec www php artisan route:clear    >/dev/null 2>&1 || true
-su-exec www php artisan view:clear     >/dev/null 2>&1 || true
-su-exec www php artisan event:clear    >/dev/null 2>&1 || true
+run_as_www php artisan cache:clear    >/dev/null 2>&1 || true
+run_as_www php artisan config:clear   >/dev/null 2>&1 || true
+run_as_www php artisan route:clear    >/dev/null 2>&1 || true
+run_as_www php artisan view:clear     >/dev/null 2>&1 || true
+run_as_www php artisan event:clear    >/dev/null 2>&1 || true
+
+# Discover packages (was skipped at build time with --no-scripts)
+echo "🔍 Running package:discover..."
+run_as_www php artisan package:discover --ansi 2>&1 || echo "⚠️ package:discover failed"
 
 # Rebuild caches (skip route:cache and view:cache to avoid stale compiled view invalidation)
 echo "♻️  Rebuilding caches..."
-su-exec www php artisan config:cache   >/dev/null 2>&1 || echo "⚠️ config:cache failed"
+run_as_www php artisan config:cache   >/dev/null 2>&1 || echo "⚠️ config:cache failed"
 # NOTE: Skipping route:cache due to Livewire compatibility issues
-# su-exec www php artisan route:cache    >/dev/null 2>&1 || echo "⚠️ route:cache failed"
+# run_as_www php artisan route:cache    >/dev/null 2>&1 || echo "⚠️ route:cache failed"
 echo "ℹ️ Skipping view:cache to avoid stale compiled view invalidation on runtime storage"
-su-exec www php artisan event:cache    >/dev/null 2>&1 || echo "⚠️ event:cache failed"
+run_as_www php artisan event:cache    >/dev/null 2>&1 || echo "⚠️ event:cache failed"
 
 # Run artisan optimize
 echo "⚡ Running artisan optimize..."
-su-exec www php artisan optimize       >/dev/null 2>&1 || echo "⚠️ artisan optimize failed"
+run_as_www php artisan optimize       >/dev/null 2>&1 || echo "⚠️ artisan optimize failed"
 
 # Verify critical directories are writable
 echo "🔍 Verifying cache directories..."
@@ -195,6 +275,78 @@ done
 
 echo "✅ IAM App ready at: $(date)"
 
+# Copy public assets to shared volume (only if PUBLIC_VOLUME is set and exists)
+# Do this AFTER cache warming and Livewire publishing so all assets are generated
+if [ -n "${PUBLIC_VOLUME}" ] && [ -d "${PUBLIC_VOLUME}" ]; then
+    if [ "${SKIP_PUBLIC_SYNC}" = "true" ]; then
+        echo "ℹ️  SKIP_PUBLIC_SYNC=true, skipping public asset sync"
+    else
+        SOURCE_REAL=$(cd "${APP_WORKDIR}/public" 2>/dev/null && pwd || echo "${APP_WORKDIR}/public")
+        DEST_REAL=$(cd "${PUBLIC_VOLUME}" 2>/dev/null && pwd || echo "${PUBLIC_VOLUME}")
+        
+        if [ "${SOURCE_REAL}" = "${DEST_REAL}" ]; then
+            echo "ℹ️  Source and destination are the same (shared volume), skipping sync"
+        else
+            echo "📦 Syncing public assets to ${PUBLIC_VOLUME}..."
+            mkdir -p "${PUBLIC_VOLUME}"
+            chown -R www:www "${PUBLIC_VOLUME}" 2>/dev/null || true
+            chmod -R 755 "${PUBLIC_VOLUME}" 2>/dev/null || true
+            if command -v rsync >/dev/null 2>&1; then
+              run_as_www rsync -a --delete "${APP_WORKDIR}/public/" "${PUBLIC_VOLUME}/" && 
+                echo "✅ Public assets synced via rsync" || echo "⚠️ rsync failed"
+            else
+              if [ -d "${PUBLIC_VOLUME}" ] && [ "$(ls -A ${PUBLIC_VOLUME} 2>/dev/null)" ]; then
+                rm -rf "${PUBLIC_VOLUME:?}"/* 2>/dev/null || true
+              fi
+              run_as_www cp -r "${APP_WORKDIR}/public/." "${PUBLIC_VOLUME}/" && 
+                echo "✅ Public assets copied" || echo "⚠️ cp failed"
+            fi
+        fi
+    fi
+else
+    echo "ℹ️  PUBLIC_VOLUME not set or doesn't exist, skipping public sync"
+fi
+
+# Verify APP_KEY is actually loaded by Laravel configuration (tinker check)
+echo "🔍 Verifying APP_KEY in Laravel configuration..."
+MAX_CHECKS=3
+CHECK_COUNT=0
+
+while [ $CHECK_COUNT -lt $MAX_CHECKS ]; do
+    TINKER_KEY=$(php artisan tinker --execute="echo config('app.key');" 2>/dev/null | tr -d '\r' || true)
+    if [ -n "$TINKER_KEY" ] && [ "${#TINKER_KEY}" -gt 10 ]; then
+        echo "✅ Laravel APP_KEY verified successfully: ${TINKER_KEY:0:15}..."
+        break
+    else
+        echo "❌ CRITICAL: Laravel config('app.key') is EMPTY in config cache!"
+        echo "🧹 Attempting to generate key and re-optimize..."
+        
+        if ! grep -q "^APP_KEY=" .env; then
+            echo "APP_KEY=" >> .env
+        fi
+        
+        php artisan key:generate --force || true
+        run_as_www php artisan optimize >/dev/null 2>&1 || true
+    fi
+    CHECK_COUNT=$((CHECK_COUNT + 1))
+    
+    if [ $CHECK_COUNT -eq $MAX_CHECKS ]; then
+        echo "❌ CRITICAL ERROR: APP_KEY remains empty after $MAX_CHECKS attempts! Application will fail to decrypt sessions."
+    fi
+    sleep 1
+done
+
+# Verify public build assets
+echo "🔍 Checking for critical public build assets..."
+if [ -f "public/build/manifest.json" ]; then
+    echo "✅ Vite build manifest found (public/build/manifest.json)"
+elif [ -f "public/mix-manifest.json" ]; then
+    echo "✅ Mix build manifest found (public/mix-manifest.json)"
+else
+    echo "⚠️  WARNING: No build manifest (Vite/Mix) found in public directory."
+    echo "   Frontend assets may not have been compiled correctly!"
+fi
+
 # Execute main command
 if [ $# -eq 0 ]; then
     set -- php-fpm -F
@@ -202,7 +354,3 @@ fi
 
 echo "🚀 Starting: $*"
 exec "$@"
-
-# ... remainder of script could be appended or reused from entrypoint-registry
-
-# For brevity rest of script omitted; we assume same as entrypoint-registry after db wait
