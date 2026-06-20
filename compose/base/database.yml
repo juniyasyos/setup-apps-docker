@@ -27,7 +27,7 @@ services:
           memory: 512M
           cpus: "1"
     command:
-      - --max-connections=60
+      - --max-connections=400
       - --skip-name-resolve
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-prootpass123", "--silent"]

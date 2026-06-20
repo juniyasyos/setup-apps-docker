@@ -119,10 +119,10 @@ RUN set -eux; \
         echo "apc.ttl=3600"; \
     } > /usr/local/etc/php/conf.d/apcu.ini; \
     sed -ri 's|^;?pm =.*|pm = dynamic|' /usr/local/etc/php-fpm.d/www.conf; \
-    sed -ri 's|^;?pm\.max_children =.*|pm.max_children = 30|' /usr/local/etc/php-fpm.d/www.conf; \
-    sed -ri 's|^;?pm\.start_servers =.*|pm.start_servers = 6|' /usr/local/etc/php-fpm.d/www.conf; \
-    sed -ri 's|^;?pm\.min_spare_servers =.*|pm.min_spare_servers = 3|' /usr/local/etc/php-fpm.d/www.conf; \
-    sed -ri 's|^;?pm\.max_spare_servers =.*|pm.max_spare_servers = 10|' /usr/local/etc/php-fpm.d/www.conf; \
+    sed -ri 's|^;?pm\.max_children =.*|pm.max_children = 200|' /usr/local/etc/php-fpm.d/www.conf; \
+    sed -ri 's|^;?pm\.start_servers =.*|pm.start_servers = 20|' /usr/local/etc/php-fpm.d/www.conf; \
+    sed -ri 's|^;?pm\.min_spare_servers =.*|pm.min_spare_servers = 10|' /usr/local/etc/php-fpm.d/www.conf; \
+    sed -ri 's|^;?pm\.max_spare_servers =.*|pm.max_spare_servers = 30|' /usr/local/etc/php-fpm.d/www.conf; \
     sed -ri 's|^;?pm\.max_requests =.*|pm.max_requests = 1000|' /usr/local/etc/php-fpm.d/www.conf
 
 # =========================
