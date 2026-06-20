@@ -35,11 +35,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
-          cpus: "1.5"
-        reservations:
-          memory: 512M
-          cpus: "0.5"
+          memory: 2G
+          cpus: "3"
     networks:
       default:
         aliases:
