@@ -42,11 +42,11 @@ services:
     deploy:
       resources:
         limits:
+          memory: 2G
+          cpus: "2"
+        reservations:
           memory: 1G
           cpus: "1"
-        reservations:
-          memory: 512M
-          cpus: "0.5"
 
   queue:
     extends:
@@ -75,11 +75,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 384M
-          cpus: "0.5"
+          memory: 768M
+          cpus: "1"
         reservations:
-          memory: 128M
-          cpus: "0.25"
+          memory: 256M
+          cpus: "0.5"
 
   scheduler:
     extends:
@@ -103,11 +103,11 @@ services:
     deploy:
       resources:
         limits:
+          memory: 256M
+          cpus: "0.4"
+        reservations:
           memory: 128M
           cpus: "0.2"
-        reservations:
-          memory: 64M
-          cpus: "0.1"
 
 volumes:
   smsp_public:
