@@ -1,7 +1,7 @@
 # Daftar repositori aplikasi
 # Format: nama,subfolder,git_url,cabang,prod_env,deps_lokal,deskripsi
 # ---------------------------------------------------------------------------
-siimut,siimut,https://github.com/juniyasyos/si-imut.git,modular-monolist,yes,no,SIIMUT - Sistem Informasi Imunisasi
+siimut,siimut,https://github.com/juniyasyos/si-imut.git,main,yes,no,SIIMUT - Sistem Informasi Imunisasi
 ikp,ikp,https://github.com/juniyasyos/ikp.git,main,no,no,IKP - Incident Reporting & Pelaporan Application
 iam,iam-server,https://github.com/juniyasyos/nexaid.git,main,yes,no,IAM Server - Authentication & SSO Server
 lms,lms-app,https://github.com/AryaAP23/LMS-CitraHusada,main,yes,no,Learning Management System berbasis Laravel yang dikustomisasi untuk kebutuhan internal institusi kesehatan
