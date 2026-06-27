@@ -17,8 +17,8 @@ services:
       APP_WORKDIR: /var/www/iam
       PUBLIC_VOLUME: /var/www/public-shared
       DB_HOST: database-service
-      APP_URL: "http://${HOST_IP}:${IAM_HOST_PORT:-8110}"
-      IAM_ISSUER: "http://${HOST_IP}:${IAM_HOST_PORT:-8110}"
+      APP_URL: "http://${HOST_IP}:${IAM_HOST_PORT:-8100}"
+      IAM_ISSUER: "http://${HOST_IP}:${IAM_HOST_PORT:-8100}"
       AWS_ACCESS_KEY_ID: admin
       AWS_SECRET_ACCESS_KEY: password
       AWS_DEFAULT_REGION: us-east-1
@@ -53,8 +53,8 @@ services:
       - ../../apps/iam/.env.example
     environment:
       APP_ENV: production
-      APP_URL: "http://${HOST_IP}:${IAM_HOST_PORT:-8110}"
-      IAM_ISSUER: "http://${HOST_IP}:${IAM_HOST_PORT:-8110}"
+      APP_URL: "http://${HOST_IP}:${IAM_HOST_PORT:-8100}"
+      IAM_ISSUER: "http://${HOST_IP}:${IAM_HOST_PORT:-8100}"
       DB_HOST: database-service
       DB_USER: iam_user
       DB_PASSWORD: iam-password
@@ -95,8 +95,8 @@ services:
       - ../../apps/iam/.env.example
     environment:
       APP_ENV: production
-      APP_URL: "http://${HOST_IP}:${IAM_HOST_PORT:-8110}"
-      IAM_ISSUER: "http://${HOST_IP}:${IAM_HOST_PORT:-8110}"
+      APP_URL: "http://${HOST_IP}:${IAM_HOST_PORT:-8100}"
+      IAM_ISSUER: "http://${HOST_IP}:${IAM_HOST_PORT:-8100}"
       DB_HOST: database-service
       DB_USER: iam_user
       DB_PASSWORD: iam-password
