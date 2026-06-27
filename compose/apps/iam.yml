@@ -16,6 +16,7 @@ services:
       PHP_OPCACHE_VALIDATE_TIMESTAMPS: "0"
       APP_WORKDIR: /var/www/iam
       PUBLIC_VOLUME: /var/www/public-shared
+      LOG_LEVEL: debug
       DB_HOST: database-service
       APP_URL: "http://${HOST_IP}:${IAM_HOST_PORT:-8100}"
       IAM_ISSUER: "http://${HOST_IP}:${IAM_HOST_PORT:-8100}"
