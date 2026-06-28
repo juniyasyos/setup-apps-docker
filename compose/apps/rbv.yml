@@ -29,6 +29,18 @@ services:
       AWS_BUCKET: rbv
       AWS_URL: http://${HOST_IP}:9090/rbv
       AWS_ENDPOINT: http://minio:9090
+      USE_SSO: "true"
+      IAM_ENABLED: "true"
+      IAM_HOST: "http://${HOST_IP}:${IAM_HOST_PORT:-8110}"
+      IAM_BASE_URL: "http://${HOST_IP}:${IAM_HOST_PORT:-8110}"
+      IAM_ISSUER: "http://${HOST_IP}:${IAM_HOST_PORT:-8110}"
+      IAM_VERIFY_ENDPOINT: "http://web:8100/api/sso/verify"
+      IAM_REFRESH_TOKEN_ENDPOINT: "http://web:8100/api/sso/token/refresh"
+      IAM_BACKCHANNEL_USER_APPLICATIONS_ENDPOINT: "http://web:8100/api/users/applications/detail"
+      IAM_APP_KEY: rbv-services
+      IAM_JWT_LEEWAY: "60"
+      IAM_IDENTIFIER_FIELD: nip
+      IAM_PRESERVE_SESSION_ID: true
     volumes:
       - rbv_storage:/var/www/rbv/storage
       - rbv_bootstrap_cache:/var/www/rbv/bootstrap/cache
@@ -52,9 +64,12 @@ services:
     env_file:
       - ../../apps/rbv/.env.example
     environment:
+      DB_CONNECTION: mysql
       DB_HOST: database-service
       DB_USERNAME: rbv_user
       DB_PASSWORD: rbv_pass123
+      DB_DATABASE: rbv_db
+      IAM_IDENTIFIER_FIELD: nip
     volumes:
       - rbv_storage:/var/www/rbv/storage
       - rbv_bootstrap_cache:/var/www/rbv/bootstrap/cache
@@ -84,9 +99,12 @@ services:
     env_file:
       - ../../apps/rbv/.env.example
     environment:
+      DB_CONNECTION: mysql
       DB_HOST: database-service
       DB_USERNAME: rbv_user
       DB_PASSWORD: rbv_pass123
+      DB_DATABASE: rbv_db
+      IAM_IDENTIFIER_FIELD: nip
     volumes:
       - rbv_storage:/var/www/rbv/storage
       - rbv_bootstrap_cache:/var/www/rbv/bootstrap/cache

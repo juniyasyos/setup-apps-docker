@@ -99,6 +99,7 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 COPY site/${APP_DIR}/composer.json site/${APP_DIR}/composer.lock* ./
 
 RUN set -eux; \
+    apk add --no-cache git; \
     if [ -f composer.json ]; then \
       composer install \
         --no-dev \
@@ -109,6 +110,7 @@ RUN set -eux; \
         --optimize-autoloader \
         --classmap-authoritative; \
     fi; \
+    apk del git; \
     rm -rf "$COMPOSER_CACHE_DIR" /root/.composer /tmp/*
 
 # Copy entire application code
