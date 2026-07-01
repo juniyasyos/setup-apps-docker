@@ -41,6 +41,8 @@ services:
       IAM_JWT_LEEWAY: "60"
       IAM_IDENTIFIER_FIELD: nip
       IAM_PRESERVE_SESSION_ID: true
+      IAM_BACKCHANNEL_METHOD: jwt
+      IAM_USER_SYNC_MODE: push
     volumes:
       - rbv_storage:/var/www/rbv/storage
       - rbv_bootstrap_cache:/var/www/rbv/bootstrap/cache
