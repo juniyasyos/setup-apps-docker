@@ -7,4 +7,4 @@ iam,iam-server,https://github.com/juniyasyos/nexaid.git,main,yes,no,IAM Server -
 lms,lms-app,https://github.com/AryaAP23/LMS-CitraHusada,main,yes,no,Learning Management System berbasis Laravel yang dikustomisasi untuk kebutuhan internal institusi kesehatan
 smsp,smsp,https://github.com/juniyasyos/be-laravel-smartpresence, main, yes, no, Smartpresence Deskripsi 
 rbv,rbv-app,https://github.com/juniyasyos/new-RBV,main,yes,no, RBV - Ruang Baca Virtual Platform
-fe-smsp,fe-smsp,https://github.com/juniyasyos/fe-react-smartpresence.git,main,no,no,FE-SMSP - Smartpresence Frontend React App
+fe-smsp,fe-smsp,https://github.com/Iannn-vbeta/fe-react-smartpresence.git,main,no,no,FE-SMSP - Smartpresence Frontend React App

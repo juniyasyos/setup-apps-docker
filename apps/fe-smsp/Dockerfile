@@ -27,7 +27,7 @@ COPY package*.json ./
 RUN npm config set fetch-retries 5 && \
     npm config set fetch-retry-mintimeout 20000 && \
     npm config set fetch-retry-maxtimeout 120000 && \
-    if [ -f package-lock.json ]; then npm ci; else npm install; fi
+    if [ -f package-lock.json ]; then npm ci --include=dev; else npm install --include=dev; fi
 
 COPY . .
 
