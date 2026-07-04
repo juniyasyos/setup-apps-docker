@@ -9,17 +9,44 @@
 # ===============================
 
 set -e
-clear
+clear || true
 
 echo "=============================="
 echo "🔧 Memulai proses installasi Docker..."
 echo "=============================="
 sleep 1
 
-# 🔍 Cek apakah Docker sudah terinstall
-if command -v docker &> /dev/null; then
+# 🔍 Cek apakah Docker sudah terinstall dan berfungsi
+if command -v docker &> /dev/null && docker --version &> /dev/null; then
   echo "✅ Docker sudah terinstall: $(docker --version)"
 else
+  # Cek jika docker ada di PATH tapi tidak bisa dijalankan (biasanya karena WSL integration belum aktif)
+  if command -v docker &> /dev/null; then
+    docker_err=$(docker --version 2>&1 || true)
+    if echo "$docker_err" | grep -qi "WSL integration" || grep -qi microsoft /proc/version; then
+      echo "❌ Docker terdeteksi di PATH tetapi tidak dapat dijalankan."
+      if grep -qi microsoft /proc/version; then
+        echo "💡 Deteksi WSL: Kamu menjalankan script ini di WSL."
+        echo "👉 Silakan aktifkan WSL Integration di Docker Desktop:"
+        echo "   1. Buka Docker Desktop di Windows"
+        echo "   2. Masuk ke Settings → Resources → WSL Integration"
+        echo "   3. Aktifkan/centang untuk distro ini"
+        echo "   4. Klik 'Apply & Restart'"
+        echo "Setelah itu, buka terminal baru dan jalankan kembali script ini."
+        exit 1
+      fi
+    fi
+  fi
+
+  # Cek jika tidak ada docker sama sekali dan sedang di WSL
+  if grep -qi microsoft /proc/version; then
+    echo "❌ Docker tidak ditemukan."
+    echo "💡 Deteksi WSL: Di lingkungan WSL, sangat direkomendasikan menggunakan Docker Desktop di Windows."
+    echo "👉 Silakan unduh dan install Docker Desktop dari: https://www.docker.com/products/docker-desktop/"
+    echo "👉 Setelah terinstall, aktifkan WSL Integration untuk distro ini di menu Settings."
+    exit 1
+  fi
+
   echo "📦 Melakukan update paket sistem..."
   sudo apt update -y
   sudo apt upgrade -y
@@ -62,12 +89,12 @@ fi
 echo ""
 echo "🔍 Mengecek Docker Compose..."
 
-if command -v docker-compose &> /dev/null; then
+if command -v docker-compose &> /dev/null && docker-compose --version &> /dev/null; then
   echo "✅ Docker Compose (legacy) ditemukan: $(docker-compose --version)"
 elif docker compose version &> /dev/null; then
   echo "✅ Docker Compose (modern) ditemukan: $(docker compose version)"
 else
-  echo "⚠️  Docker Compose tidak ditemukan."
+  echo "❌ Docker Compose tidak ditemukan atau tidak dapat dijalankan."
 
   if grep -qi microsoft /proc/version; then
     echo "💡 Deteksi WSL: Kamu menjalankan script ini di WSL."
@@ -76,6 +103,7 @@ else
     echo "   2. Masuk ke Settings → Resources → WSL Integration"
     echo "   3. Aktifkan untuk distro ini"
     echo "   4. Apply & Restart"
+    exit 1
   else
     echo "📥 Mengunduh Docker Compose (standalone)..."
     sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" \
