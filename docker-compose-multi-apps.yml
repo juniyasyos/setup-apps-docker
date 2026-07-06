@@ -217,7 +217,7 @@ services:
       AWS_SECRET_ACCESS_KEY: password
       AWS_BUCKET: ikp
       AWS_URL: http://192.168.1.4:9090/ikp
-      AWS_ENDPOINT: http://192.168.1.4:9090
+      AWS_ENDPOINT: http://minio:9090
       MEDIA_DISK: s3
       # SSO Configuration - Override from compose
       USE_SSO: "true"
