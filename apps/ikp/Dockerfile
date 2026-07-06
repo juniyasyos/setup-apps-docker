@@ -9,45 +9,77 @@ ARG GID=1000
 ARG TZ=Asia/Jakarta
 ARG APP_NAME="IKP Application"
 
-# Sistem & build deps
-RUN apk add --no-cache \
-      tzdata bash shadow ca-certificates unzip \
-      icu-dev oniguruma-dev libzip-dev zlib-dev \
-      libpng-dev libjpeg-turbo-dev freetype-dev \
-      libxml2-dev postgresql-dev \
-      linux-headers \
-      curl openssl \
-      mariadb-client \
-      su-exec \
-      $PHPIZE_DEPS \
-  && cp /usr/share/zoneinfo/${TZ} /etc/localtime \
-  && echo "${TZ}" > /etc/timezone \
-  && docker-php-ext-configure intl \
-  && docker-php-ext-configure gd --with-freetype --with-jpeg \
-  && docker-php-ext-install -j"$(nproc)" \
-      intl \
-      mbstring \
-      pdo \
-      pdo_mysql \
-      pdo_pgsql \
-      pgsql \
-      zip \
-      gd \
-      bcmath \
-      exif \
-      pcntl \
-      sockets \
-      opcache \
-  && pecl install igbinary apcu \
-  && docker-php-ext-enable igbinary apcu \
-  && apk del --no-network $PHPIZE_DEPS linux-headers \
-  && rm -rf /var/cache/apk/* /tmp/*
+# ------------------------------------------------------------
+# Runtime libs + temporary build deps
+# ------------------------------------------------------------
+RUN set -eux; \
+    apk add --no-cache \
+        tzdata \
+        bash \
+        shadow \
+        ca-certificates \
+        unzip \
+        curl \
+        openssl \
+        su-exec \
+        mariadb-client \
+        icu-libs \
+        oniguruma \
+        libzip \
+        zlib \
+        libpng \
+        libjpeg-turbo \
+        freetype \
+        libxml2 \
+        libpq \
+    ; \
+    apk add --no-cache --virtual .build-deps \
+        $PHPIZE_DEPS \
+        linux-headers \
+        icu-dev \
+        oniguruma-dev \
+        libzip-dev \
+        zlib-dev \
+        libpng-dev \
+        libjpeg-turbo-dev \
+        freetype-dev \
+        libxml2-dev \
+        postgresql-dev \
+    ; \
+    cp /usr/share/zoneinfo/${TZ} /etc/localtime; \
+    echo "${TZ}" > /etc/timezone; \
+    docker-php-ext-configure intl; \
+    docker-php-ext-configure gd --with-freetype --with-jpeg; \
+    docker-php-ext-install -j"$(nproc)" \
+        intl \
+        mbstring \
+        pdo \
+        pdo_mysql \
+        pdo_pgsql \
+        pgsql \
+        zip \
+        gd \
+        bcmath \
+        exif \
+        pcntl \
+        sockets \
+        opcache \
+    ; \
+    pecl install igbinary apcu; \
+    docker-php-ext-enable igbinary apcu; \
+    apk del --no-network .build-deps; \
+    rm -rf \
+        /var/cache/apk/* \
+        /tmp/* \
+        /usr/src/php* \
+        /root/.pearrc
 
 # User non-root
-RUN addgroup -g "${GID}" www \
-  && adduser -D -G www -u "${UID}" www \
-  && sed -ri 's/^user = .*/user = www/' /usr/local/etc/php-fpm.d/www.conf \
-  && sed -ri 's/^group = .*/group = www/' /usr/local/etc/php-fpm.d/www.conf
+RUN set -eux; \
+    addgroup -g "${GID}" www; \
+    adduser -D -G www -u "${UID}" www; \
+    sed -ri 's/^user = .*/user = www/' /usr/local/etc/php-fpm.d/www.conf; \
+    sed -ri 's/^group = .*/group = www/' /usr/local/etc/php-fpm.d/www.conf
 
 ENV APP_NAME=${APP_NAME}
 
@@ -57,7 +89,8 @@ ENV APP_NAME=${APP_NAME}
 FROM base AS builder
 
 ARG APP_DIR=ikp
-ENV COMPOSER_CACHE_DIR=/tmp/composer-cache \
+ENV COMPOSER_ALLOW_SUPERUSER=1 \
+    COMPOSER_CACHE_DIR=/tmp/composer-cache \
     COMPOSER_MEMORY_LIMIT=-1 \
     COMPOSER_NO_INTERACTION=1
 
@@ -67,21 +100,64 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 COPY site/${APP_DIR}/composer.json site/${APP_DIR}/composer.lock* ./
 RUN set -eux; \
-    composer install \
-      --prefer-dist \
-      --no-interaction \
-      --no-progress \
-      --classmap-authoritative \
-      --no-scripts; \
-    rm -rf "$COMPOSER_CACHE_DIR"
+    if [ -f composer.json ]; then \
+      composer install \
+        --no-dev \
+        --prefer-dist \
+        --no-interaction \
+        --no-progress \
+        --no-scripts \
+        --optimize-autoloader \
+        --classmap-authoritative; \
+    fi; \
+    rm -rf "$COMPOSER_CACHE_DIR" /root/.composer /tmp/*
 
 COPY site/${APP_DIR}/ .
+
+# Clean unnecessary files from final app payload
 RUN set -eux; \
-    composer dump-autoload --optimize --classmap-authoritative --no-scripts || true; \
-    if [ -f .env ]; then \
-      php artisan optimize || true; \
+    rm -rf \
+        .git \
+        .github \
+        node_modules \
+        tests \
+        docs \
+        storage/logs/* \
+        storage/framework/cache/* \
+        storage/framework/cache/data/* \
+        storage/framework/sessions/* \
+        storage/framework/views/* \
+        storage/framework/testing/* \
+        storage/app/private/* \
+        storage/app/public/* \
+        bootstrap/cache/*.php \
+        .env \
+        .env.* \
+        npm-debug.log \
+        yarn-debug.log \
+        yarn-error.log \
+        pnpm-debug.log \
+        README.md \
+        CHANGELOG.md \
+    ; \
+    if [ -f composer.json ]; then \
+      composer dump-autoload \
+        --no-dev \
+        --optimize \
+        --classmap-authoritative \
+        --no-scripts; \
     fi; \
-    rm -rf /tmp/*
+    if [ -f artisan ]; then \
+        php artisan package:discover --ansi || true; \
+        php artisan config:clear || true; \
+        php artisan route:clear || true; \
+        php artisan view:clear || true; \
+        php artisan event:clear || true; \
+    fi; \
+    rm -rf \
+        "$COMPOSER_CACHE_DIR" \
+        /root/.composer \
+        /tmp/*
 
 # =========================
 

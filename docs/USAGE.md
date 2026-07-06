@@ -202,7 +202,7 @@ Skrip `./rsch prepare` memiliki **tiga mode persiapan** interaktif yang dirancan
 *   **Tujuan**: Menjalankan aplikasi langsung dari image yang sudah di-compile di repositori cloud (misal Docker Hub / GHCR). Skenario ini sangat ideal untuk server production guna menghindari proses compile aset yang memakan memori CPU server.
 *   **Prosedur**:
     1.  Mengecek apakah sudah ada catatan image tersimpan di `.app-modes`. Jika ada, user ditanya apakah ingin mempertahankan (`Keep`) atau memperbarui (`Update`).
-    2.  Meminta input teks alamat image lengkap beserta tag-nya (contoh: `ghcr.io/juniyasyos/siimut:v2.0.0`).
+    2.  Meminta input teks alamat image lengkap beserta tag-nya (contoh: `ghcr.io/juniyasyos/siimut:v2.1.0`).
     3.  Menyimpan pasangan konfigurasi tersebut ke berkas `.app-modes` agar docker-compose merujuk ke image eksternal ini saat proses startup dijalankan.
 
 ---

@@ -4,7 +4,7 @@ repo: https://github.com/juniyasyos/si-imut.git
 branch: main
 source_dir: siimut
 image: juniyasyos/siimut
-version: v2.0.0
+version: v2.1.0
 port: 8000
 domain: siimut.local
 database: siimut_db

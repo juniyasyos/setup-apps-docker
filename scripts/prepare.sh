@@ -37,6 +37,12 @@ source "${SCRIPT_DIR}/prepare/mode_clone.sh"
 source "${SCRIPT_DIR}/prepare/mode_image.sh"
 
 # ============================================
+# Global Options
+# ============================================
+SKIP_EXISTING="false"
+IS_ALL="false"
+
+# ============================================
 # Color & Log Helpers
 # ============================================
 RED='\033[0;31m'
@@ -413,6 +419,7 @@ list_apps() {
     echo "  ./prepare.sh <app1> <app2>      — prepare beberapa app sekaligus"
     echo "  ./prepare.sh mynewapp           — scaffolding + prepare app baru"
     echo "  ./prepare.sh siimut --no-deps   — skip install dependencies"
+    echo "  ./prepare.sh all --skip         — prepare semua app (mode clone) tanpa interaksi/prompt"
     echo ""
 }
 
@@ -619,7 +626,13 @@ prepare_app() {
 
     # ── Pilih mode interaktif ─────────────────────────────────────────────────
     local PREPARE_MODE=""
-    select_prepare_mode "${APP_NAME}" "${APP_DESC}"
+    if [ "${IS_ALL}" = "true" ]; then
+        PREPARE_MODE="clone"
+        echo -e "  ${CYAN}▶ Mode (Automated for ALL): Clone repo & build image${NC}"
+        echo ""
+    else
+        select_prepare_mode "${APP_NAME}" "${APP_DESC}"
+    fi
 
     # ── Jalankan mode yang dipilih ────────────────────────────────────────────
     case "${PREPARE_MODE}" in
@@ -672,6 +685,9 @@ main() {
             --no-deps|--no-dependencies)
                 no_deps=true
                 ;;
+            --skip)
+                SKIP_EXISTING="true"
+                ;;
             -h|--help)
                 list_apps
                 exit 0
@@ -686,6 +702,7 @@ main() {
     if [ "${apps[*]}" = "all" ]; then
         load_all_apps
         apps=("${APP_NAMES[@]}")
+        IS_ALL="true"
     fi
 
     # Run prepare for each app

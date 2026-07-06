@@ -28,45 +28,67 @@ phase_git() {
         echo "  R) Reset — hard reset + git pull (buang perubahan lokal)"
         echo ""
 
-        local action
-        while true; do
-            read -rp "  Pilihan [P/s/r]: " action </dev/tty
-            action="${action:-P}"
-            case "${action^^}" in
-                S)
-                    echo -e "  ${BLUE}ℹ️  Git phase di-skip.${NC}"
-                    return 0
-                    ;;
-                P)
-                    echo "🔄 Pulling latest from branch '${BRANCH}'..."
-                    cd "${site_dir}"
-                    git fetch origin
-                    if git rev-parse --verify "origin/${BRANCH}" > /dev/null 2>&1; then
-                        git checkout "${BRANCH}" && git pull origin "${BRANCH}" \
-                            && log_success "Git pull selesai." \
-                            || { log_error "Git pull gagal!"; exit 1; }
-                    else
-                        echo "⚠️  Branch '${BRANCH}' tidak ada di origin, pull default..."
-                        git pull origin || { log_error "Git pull gagal!"; exit 1; }
-                    fi
-                    cd "${SCRIPT_DIR}"
-                    break
-                    ;;
-                R)
-                    echo -e "  ${YELLOW}⚠️  Hard reset + pull...${NC}"
-                    cd "${site_dir}"
-                    git fetch origin
-                    git checkout "${BRANCH}" 2>/dev/null || true
-                    git reset --hard "origin/${BRANCH}" \
-                        && log_success "Git reset + pull selesai." \
-                        || { log_error "Git reset gagal!"; exit 1; }
-                    cd "${SCRIPT_DIR}"
-                    break
-                    ;;
-                *)
-                    echo -e "  ${RED}❌ Pilihan tidak valid.${NC}" ;;
-            esac
-        done
+        local action="P"
+        if [ "${SKIP_EXISTING:-false}" = "true" ]; then
+            action="S"
+            echo -e "  ${BLUE}ℹ️  --skip is active. Automatically choosing Skip.${NC}"
+        elif [ "${IS_ALL:-false}" = "true" ]; then
+            action="P"
+            echo -e "  ${BLUE}ℹ️  Running in automated 'all' mode. Automatically choosing Pull.${NC}"
+        else
+            echo "  Apa yang ingin dilakukan?"
+            echo "  S) Skip  — abaikan, tidak pull"
+            echo "  P) Pull  — git pull origin ${BRANCH}"
+            echo "  R) Reset — hard reset + git pull (buang perubahan lokal)"
+            echo ""
+
+            while true; do
+                read -rp "  Pilihan [P/s/r]: " action </dev/tty
+                action="${action:-P}"
+                case "${action^^}" in
+                    S)
+                        echo -e "  ${BLUE}ℹ️  Git phase di-skip.${NC}"
+                        return 0
+                        ;;
+                    P|R)
+                        break
+                        ;;
+                    *)
+                        echo -e "  ${RED}❌ Pilihan tidak valid.${NC}" ;;
+                esac
+            done
+        fi
+
+        case "${action^^}" in
+            S)
+                echo -e "  ${BLUE}ℹ️  Git phase di-skip.${NC}"
+                return 0
+                ;;
+            P)
+                echo "🔄 Pulling latest from branch '${BRANCH}'..."
+                cd "${site_dir}"
+                git fetch origin
+                if git rev-parse --verify "origin/${BRANCH}" > /dev/null 2>&1; then
+                    git checkout "${BRANCH}" && git pull origin "${BRANCH}" \
+                        && log_success "Git pull selesai." \
+                        || { log_error "Git pull gagal!"; exit 1; }
+                else
+                    echo "⚠️  Branch '${BRANCH}' tidak ada di origin, pull default..."
+                    git pull origin || { log_error "Git pull gagal!"; exit 1; }
+                fi
+                cd "${SCRIPT_DIR}"
+                ;;
+            R)
+                echo -e "  ${YELLOW}⚠️  Hard reset + pull...${NC}"
+                cd "${site_dir}"
+                git fetch origin
+                git checkout "${BRANCH}" 2>/dev/null || true
+                git reset --hard "origin/${BRANCH}" \
+                    && log_success "Git reset + pull selesai." \
+                    || { log_error "Git reset gagal!"; exit 1; }
+                cd "${SCRIPT_DIR}"
+                ;;
+        esac
     else
         echo "📥 Clone dari ${REPO_URL} (branch: ${BRANCH})..."
         if git clone -b "${BRANCH}" "${REPO_URL}" "${site_dir}" 2>/dev/null; then
@@ -109,24 +131,38 @@ phase_env() {
         echo "  S) Skip  — biarkan .env yang ada"
         echo "  R) Reset — timpa dengan .env.example"
         echo ""
-        local action
-        while true; do
-            read -rp "  Pilihan [S/r]: " action </dev/tty
-            action="${action:-S}"
-            case "${action^^}" in
-                S) echo -e "  ${BLUE}ℹ️  .env dibiarkan.${NC}"; break ;;
-                R)
-                    if [ -f "${site_dir}/.env.example" ]; then
-                        cp "${site_dir}/.env.example" "${site_dir}/.env"
-                        log_success ".env berhasil di-reset dari .env.example."
-                    else
-                        log_warn ".env.example tidak ditemukan, skip reset."
-                    fi
-                    break
-                    ;;
-                *) echo -e "  ${RED}❌ Pilihan tidak valid.${NC}" ;;
-            esac
-        done
+        local action="S"
+        if [ "${SKIP_EXISTING:-false}" = "true" ]; then
+            action="S"
+            echo -e "  ${BLUE}ℹ️  --skip is active. Automatically keeping existing .env.${NC}"
+        elif [ "${IS_ALL:-false}" = "true" ]; then
+            action="S"
+            echo -e "  ${BLUE}ℹ️  Running in automated 'all' mode. Automatically keeping existing .env.${NC}"
+        else
+            echo "  S) Skip  — biarkan .env yang ada"
+            echo "  R) Reset — timpa dengan .env.example"
+            echo ""
+            while true; do
+                read -rp "  Pilihan [S/r]: " action </dev/tty
+                action="${action:-S}"
+                case "${action^^}" in
+                    S|R) break ;;
+                    *) echo -e "  ${RED}❌ Pilihan tidak valid.${NC}" ;;
+                esac
+            done
+        fi
+
+        case "${action^^}" in
+            S) echo -e "  ${BLUE}ℹ️  .env dibiarkan.${NC}" ;;
+            R)
+                if [ -f "${site_dir}/.env.example" ]; then
+                    cp "${site_dir}/.env.example" "${site_dir}/.env"
+                    log_success ".env berhasil di-reset dari .env.example."
+                else
+                    log_warn ".env.example tidak ditemukan, skip reset."
+                fi
+                ;;
+        esac
     fi
 }
 
@@ -233,19 +269,32 @@ phase_prod_env() {
         echo ""
         echo -e "  ${YELLOW}⚠️  ${prod_env_file} sudah ada.${NC}"
         echo ""
-        echo "  S) Skip  — gunakan file yang ada"
-        echo "  R) Regenerate — generate ulang secrets"
-        echo ""
-        local action
-        while true; do
-            read -rp "  Pilihan [S/r]: " action </dev/tty
-            action="${action:-S}"
-            case "${action^^}" in
-                S) echo -e "  ${BLUE}ℹ️  Production env dibiarkan.${NC}"; return 0 ;;
-                R) echo -e "  ${YELLOW}⚠️  Regenerating secrets...${NC}"; break ;;
-                *) echo -e "  ${RED}❌ Pilihan tidak valid.${NC}" ;;
-            esac
-        done
+
+        local action="S"
+        if [ "${SKIP_EXISTING:-false}" = "true" ]; then
+            action="S"
+            echo -e "  ${BLUE}ℹ️  --skip is active. Automatically keeping existing production env.${NC}"
+        elif [ "${IS_ALL:-false}" = "true" ]; then
+            action="S"
+            echo -e "  ${BLUE}ℹ️  Running in automated 'all' mode. Automatically keeping existing production env.${NC}"
+        else
+            echo "  S) Skip  — gunakan file yang ada"
+            echo "  R) Regenerate — generate ulang secrets"
+            echo ""
+            while true; do
+                read -rp "  Pilihan [S/r]: " action </dev/tty
+                action="${action:-S}"
+                case "${action^^}" in
+                    S|R) break ;;
+                    *) echo -e "  ${RED}❌ Pilihan tidak valid.${NC}" ;;
+                esac
+            done
+        fi
+
+        case "${action^^}" in
+            S) echo -e "  ${BLUE}ℹ️  Production env dibiarkan.${NC}"; return 0 ;;
+            R) echo -e "  ${YELLOW}⚠️  Regenerating secrets...${NC}" ;;
+        esac
     fi
 
     # Tentukan sumber template .env.example
