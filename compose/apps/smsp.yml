@@ -12,11 +12,12 @@ services:
     env_file:
       - ../../apps/smsp/.env.example
     environment:
-      APP_ENV: production
-      APP_DEBUG: "true"
+      APP_ENV: ${APP_ENV:-local}
+      APP_DEBUG: ${APP_DEBUG:-true}
       APP_WORKDIR: /var/www/smsp
       PUBLIC_VOLUME: /var/www/smsp/public
       APP_URL: "http://${HOST_IP:-localhost}:7200"
+      SANCTUM_STATEFUL_DOMAINS: "${HOST_IP:-localhost}:7250,${HOST_IP:-localhost}:7200,localhost,127.0.0.1,127.0.0.1:7250"
       TRUSTED_PROXIES: "*"
 
       DB_CONNECTION: mysql
@@ -35,6 +36,21 @@ services:
       AWS_URL: http://${HOST_IP:-localhost}:9090/smsp
       AWS_ENDPOINT: http://minio:9090
       AWS_USE_PATH_STYLE_ENDPOINT: "true"
+      USE_SSO: "true"
+      IAM_ENABLED: "true"
+      IAM_HOST: "http://${HOST_IP:-localhost}:${IAM_HOST_PORT:-8110}"
+      IAM_BASE_URL: "http://${HOST_IP:-localhost}:${IAM_HOST_PORT:-8110}"
+      IAM_ISSUER: "http://${HOST_IP:-localhost}:${IAM_HOST_PORT:-8110}"
+      IAM_VERIFY_ENDPOINT: "http://web:8100/api/sso/verify"
+      IAM_REFRESH_TOKEN_ENDPOINT: "http://web:8100/api/sso/token/refresh"
+      IAM_BACKCHANNEL_USER_APPLICATIONS_ENDPOINT: "http://web:8100/api/users/applications/detail"
+      IAM_BACKCHANNEL: "http://web:8100"
+      IAM_LOGIN_ROUTE: "/sso/login"
+      IAM_CALLBACK_ROUTE: "/sso/callback"
+      IAM_DEFAULT_REDIRECT: "http://${HOST_IP:-localhost}:7250/dashboard"
+      IAM_APP_KEY: "smartpresence-services"
+      IAM_SYNC_ROLES: true
+      IAM_UNIT_KERJA_MODEL: "App\\Models\\WorkUnit"
     volumes:
       - smsp_storage:/var/www/smsp/storage
       - smsp_bootstrap_cache:/var/www/smsp/bootstrap/cache

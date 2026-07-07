@@ -30,9 +30,9 @@ services:
       MEDIA_DISK: s3
       USE_SSO: "true"
       IAM_ENABLED: "true"
-      IAM_HOST: "http://${HOST_IP}:8100"
-      IAM_BASE_URL: "http://${HOST_IP}:8100"
-      IAM_ISSUER: "http://${HOST_IP}:8100"
+      IAM_HOST: "http://${HOST_IP}:${IAM_HOST_PORT:-8110}"
+      IAM_BASE_URL: "http://${HOST_IP}:${IAM_HOST_PORT:-8110}"
+      IAM_ISSUER: "http://${HOST_IP}:${IAM_HOST_PORT:-8110}"
       IAM_VERIFY_ENDPOINT: "http://web:8100/api/sso/verify"
       IAM_REFRESH_TOKEN_ENDPOINT: "http://web:8100/api/sso/token/refresh"
       IAM_BACKCHANNEL_USER_APPLICATIONS_ENDPOINT: "http://web:8100/api/users/applications/detail"

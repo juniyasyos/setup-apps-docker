@@ -82,7 +82,7 @@ Dokumen ini membedah setiap aplikasi yang dikelola oleh orchestrator RSCH secara
 * **Framework**: React / Vite
 * **Port Mapping**:
   * Internal / Host: `7250`
-* **Network & Routing**: Dikendalikan mandiri melalui proxy nginx internal atau `VITE_API_BASE_URL`.
+* **Network & Routing**: Dikendalikan mandiri melalui proxy nginx internal atau `VITE_API_URL`.
 
 ## 7. RBV (Ruang Baca Virtual Platform)
 * **Deskripsi**: Ruang Baca Virtual, platform perpustakaan / literatur medis digital untuk tenaga kesehatan.
