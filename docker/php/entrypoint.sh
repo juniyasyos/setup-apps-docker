@@ -111,7 +111,9 @@ fi
 APP_KEY_VALUE=$(grep -E '^APP_KEY=' .env | head -1 | cut -d'=' -f2- | tr -d '\r' || true)
 if [ -z "${APP_KEY_VALUE}" ] || [ "${APP_KEY_VALUE}" = "base64:" ] || [ "${#APP_KEY_VALUE}" -le 10 ]; then
     echo "🔐 Generating APP_KEY..."
-    rm -f bootstrap/cache/config.php 2>/dev/null || true
+    # Remove stale bootstrap cache before running any artisan commands
+    rm -f bootstrap/cache/services.php bootstrap/cache/packages.php bootstrap/cache/config.php bootstrap/cache/routes-v7.php bootstrap/cache/events.php bootstrap/cache/modules.php bootstrap/cache/settings.php 2>/dev/null || true
+
     # Unset APP_KEY from OS environment if it's empty so artisan reads from .env instead of docker env
     unset APP_KEY
     php artisan key:generate --force
@@ -147,9 +149,7 @@ mkdir -p storage/framework/cache/data \
 # Ensure Laravel log file exists and is writable (prevents "Permission denied" on first write)
 touch storage/logs/laravel.log
 
-# Remove stale bootstrap cache from previous builds that may reference dev-only providers
-echo "🧹 Clearing stale bootstrap cache files..."
-rm -f bootstrap/cache/services.php bootstrap/cache/packages.php bootstrap/cache/config.php bootstrap/cache/routes-v7.php bootstrap/cache/events.php bootstrap/cache/modules.php bootstrap/cache/settings.php 2>/dev/null || true
+# (Cache clearing was moved up to before key:generate to prevent class not found errors)
 
 # Publish and verify Livewire assets (CRITICAL - do this BEFORE symlink)
 if [ -d vendor/livewire/livewire ]; then

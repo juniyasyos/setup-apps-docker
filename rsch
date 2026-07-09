@@ -173,6 +173,10 @@ cmd_run_app() {
         services+=("app-${app}")
         grep -q -E "^queue:\s*true" "${SCRIPT_DIR}/apps/${app}/app.yml" 2>/dev/null && services+=("queue-${app}")
         grep -q -E "^scheduler:\s*true" "${SCRIPT_DIR}/apps/${app}/app.yml" 2>/dev/null && services+=("scheduler-${app}")
+        
+        # Clear local and volume cache before starting
+        rm -f "${SCRIPT_DIR}/site/${app}/bootstrap/cache/"*.php 2>/dev/null || true
+        docker volume rm "base_${app}_bootstrap_cache" >/dev/null 2>&1 || true
     done
 
     log_info "Starting: $*"
@@ -228,6 +232,17 @@ cmd_down_app() {
         $(_compose_cmd) down "${services[@]}"
         log_success "Stopped: ${apps[*]}"
     fi
+
+    # Explicitly clear bootstrap cache volume and local cache files
+    for app in "${apps[@]}"; do
+        rm -f "${SCRIPT_DIR}/site/${app}/bootstrap/cache/"*.php 2>/dev/null || true
+        docker volume rm "base_${app}_bootstrap_cache" >/dev/null 2>&1 || true
+    done
+
+    # Clear cache in web server (Nginx) by reloading it
+    log_info "Clearing cache in web server (reloading Nginx)..."
+    $(_compose_cmd) exec web nginx -s reload 2>/dev/null || true
+    log_success "Web cache cleared."
 }
 
 # ──────────────────────────────────────────────
@@ -304,6 +319,11 @@ cmd_restart() {
     log_info "Restarting ${services[*]}..."
     $(_compose_cmd) restart "${services[@]}"
     log_success "Restarted ${app}"
+
+    # Clear cache in web server (Nginx) by reloading it
+    log_info "Clearing cache in web server (reloading Nginx)..."
+    $(_compose_cmd) exec web nginx -s reload 2>/dev/null || true
+    log_success "Web cache cleared."
 }
 
 # ──────────────────────────────────────────────
