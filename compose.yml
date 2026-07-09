@@ -109,15 +109,11 @@ services:
     extends:
       file: compose/apps/smsp.yml
       service: queue
-    networks:
-      - default
 
   scheduler-smsp:
     extends:
       file: compose/apps/smsp.yml
       service: scheduler
-    networks:
-      - default
 # Named Volumes
 # Volume naming convention:
 #   {app}_{type}  →  e.g. siimut_storage, ikp_public
@@ -178,4 +174,7 @@ volumes:
 networks:
   default:
     name: rsch-apps_default
+    external: true
+  storage-network:
+    name: "${STORAGE_NETWORK_NAME:-rsch-storage}"
     external: true

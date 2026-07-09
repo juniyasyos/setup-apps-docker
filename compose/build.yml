@@ -28,7 +28,7 @@ services:
         AWS_SECRET_ACCESS_KEY: "password"
         AWS_BUCKET: "siimut"
         AWS_URL: "http://minio:9090/siimut"
-        AWS_ENDPOINT: "http://minio:9090"
+        AWS_ENDPOINT: "http://minio:9000"
         BUILD_TIMESTAMP: "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
         DB_DUMP_DISABLE_SSL: true
         DB_DUMP_TIMEOUT: 3600
@@ -60,7 +60,7 @@ services:
         DEBUGBAR_ENABLED: true
         AWS_BUCKET: "ikp"
         AWS_URL: "http://minio:9090/ikp"
-        AWS_ENDPOINT: "http://minio:9090"
+        AWS_ENDPOINT: "http://minio:9000"
         BUILD_TIMESTAMP: "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
     image: ikp:${IKP_VERSION:-latest}
     pull_policy: never
@@ -105,7 +105,7 @@ services:
         AWS_SECRET_ACCESS_KEY: "password"
         AWS_BUCKET: "lms"
         AWS_URL: "http://minio:9090/lms"
-        AWS_ENDPOINT: "http://minio:9090"
+        AWS_ENDPOINT: "http://minio:9000"
         BUILD_TIMESTAMP: "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
     image: lms:${LMS_VERSION:-latest}
     pull_policy: never
@@ -132,7 +132,7 @@ services:
         AWS_SECRET_ACCESS_KEY: "password"
         AWS_BUCKET: "rbv"
         AWS_URL: "http://minio:9090/rbv"
-        AWS_ENDPOINT: "http://minio:9090"
+        AWS_ENDPOINT: "http://minio:9000"
         BUILD_TIMESTAMP: "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
     image: rbv:${RBV_VERSION:-latest}
     pull_policy: never
@@ -163,7 +163,7 @@ services:
         AWS_SECRET_ACCESS_KEY: "password"
         AWS_BUCKET: "smsp"
         AWS_URL: "http://minio:9090/smsp"
-        AWS_ENDPOINT: "http://minio:9090"
+        AWS_ENDPOINT: "http://minio:9000"
 
         BUILD_TIMESTAMP: "${BUILD_TIMESTAMP:-manual}"
     image: smsp:${SMSP_VERSION:-v1.0.0}

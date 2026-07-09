@@ -11,7 +11,7 @@ services:
     env_file:
       - ../../apps/siimut/.env.example
     environment:
-      APP_ENV: production
+      APP_ENV: ${APP_ENV:-local}
       APP_DEBUG: true
       APP_WORKDIR: /var/www/siimut
       PUBLIC_VOLUME: /var/www/siimut/public
@@ -26,7 +26,7 @@ services:
       AWS_SECRET_ACCESS_KEY: password
       AWS_BUCKET: siimut
       AWS_URL: http://${HOST_IP}:9090/siimut
-      AWS_ENDPOINT: http://minio:9090
+      AWS_ENDPOINT: http://minio:9000
       USE_SSO: "true"
       IAM_ENABLED: "true"
       IAM_HOST: "http://${HOST_IP}:${IAM_HOST_PORT:-8110}"
@@ -46,8 +46,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2G
-          cpus: "2"
+          memory: ${DEPLOY_MEMORY_LIMIT:-512M}
+          cpus: "${DEPLOY_CPUS_LIMIT:-1}"
         reservations:
           memory: 512M
           cpus: "0.5"
@@ -78,8 +78,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 384M
-          cpus: "0.5"
+          memory: ${DEPLOY_MEMORY_LIMIT:-512M}
+          cpus: "${DEPLOY_CPUS_LIMIT:-1}"
         reservations:
           memory: 128M
           cpus: "0.25"
@@ -105,8 +105,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 128M
-          cpus: "0.5"
+          memory: ${DEPLOY_MEMORY_LIMIT:-512M}
+          cpus: "${DEPLOY_CPUS_LIMIT:-1}"
         reservations:
           memory: 64M
           cpus: "0.1"

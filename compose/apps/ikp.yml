@@ -11,8 +11,8 @@ services:
     env_file:
       - ../../apps/ikp/.env.example
     environment:
-      APP_ENV: production
-      APP_DEBUG: "false"
+      APP_ENV: ${APP_ENV:-local}
+      APP_DEBUG: "true"
       APP_WORKDIR: /var/www/ikp
       PUBLIC_VOLUME: /var/www/ikp/public
       APP_URL: "http://${HOST_IP}:8200"
@@ -26,8 +26,10 @@ services:
       AWS_SECRET_ACCESS_KEY: password
       AWS_BUCKET: ikp
       AWS_URL: http://${HOST_IP}:9090/ikp
-      AWS_ENDPOINT: http://minio:9090
+      AWS_ENDPOINT: http://minio:9000
+      AWS_USE_PATH_STYLE_ENDPOINT: "true"
       MEDIA_DISK: s3
+      LIVEWIRE_TMP_DISK: local
       USE_SSO: "true"
       IAM_ENABLED: "true"
       IAM_HOST: "http://${HOST_IP}:${IAM_HOST_PORT:-8110}"
@@ -39,6 +41,7 @@ services:
       IAM_LOGIN_ROUTE: "/login"
       IAM_CALLBACK_ROUTE: "/callback"
       IAM_APP_KEY: "incident-reporting"
+      LOG_LEVEL: "debug"
     volumes:
       - ikp_storage:/var/www/ikp/storage
       - ikp_bootstrap_cache:/var/www/ikp/bootstrap/cache
@@ -50,8 +53,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
-          cpus: "1"
+          memory: ${DEPLOY_MEMORY_LIMIT:-512M}
+          cpus: "${DEPLOY_CPUS_LIMIT:-1}"
         reservations:
           memory: 512M
           cpus: "0.5"
@@ -66,7 +69,7 @@ services:
     env_file:
       - ../../apps/ikp/.env.example
     environment:
-      APP_ENV: production
+      APP_ENV: ${APP_ENV:-local}
       DB_HOST: database-service
       DB_USERNAME: ikp_user
       DB_PASSWORD: ikp-password
@@ -83,8 +86,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 384M
-          cpus: "0.7"
+          memory: ${DEPLOY_MEMORY_LIMIT:-512M}
+          cpus: "${DEPLOY_CPUS_LIMIT:-1}"
         reservations:
           memory: 128M
           cpus: "0.25"
@@ -99,7 +102,7 @@ services:
     env_file:
       - ../../apps/ikp/.env.example
     environment:
-      APP_ENV: production
+      APP_ENV: ${APP_ENV:-local}
       DB_HOST: database-service
       DB_USERNAME: ikp_user
       DB_PASSWORD: ikp-password
@@ -111,8 +114,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 128M
-          cpus: "0.2"
+          memory: ${DEPLOY_MEMORY_LIMIT:-512M}
+          cpus: "${DEPLOY_CPUS_LIMIT:-1}"
         reservations:
           memory: 64M
           cpus: "0.1"

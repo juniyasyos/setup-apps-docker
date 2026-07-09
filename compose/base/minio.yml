@@ -4,85 +4,169 @@ services:
   minio:
     image: minio/minio:latest
     container_name: minio
-    restart: always
+    restart: unless-stopped
+
     environment:
       MINIO_ROOT_USER: "${MINIO_ROOT_USER:-admin}"
       MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:-password}"
-      MINIO_PROMETHEUS_AUTH_TYPE: "public"
-    volumes:
-      - minio_data:/data
-    ports:
-      - "${MINIO_API_PORT:-9090}:9090"
-      - "${MINIO_CONSOLE_PORT:-9091}:9091"
+      MINIO_PROMETHEUS_AUTH_TYPE: "${MINIO_PROMETHEUS_AUTH_TYPE:-public}"
+
     command:
       - server
       - /data
       - --address
-      - ":9090"
+      - ":9000"
       - --console-address
-      - ":9091"
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-          cpus: "1"
-        reservations:
-          memory: 256M
-          cpus: "0.15"
+      - ":9001"
+
+    volumes:
+      - minio_data:/data
+
+    ports:
+      # Host:Container
+      # API / S3 endpoint local: http://localhost:9090
+      - "${MINIO_API_PORT:-9090}:9000"
+
+      # Console local: http://localhost:9091
+      - "${MINIO_CONSOLE_PORT:-9091}:9001"
+
+    networks:
+      - storage-network
+
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "curl -f http://localhost:9090/minio/health/ready || exit 1",
+          "curl -f http://localhost:9000/minio/health/ready || exit 1"
         ]
-      interval: 5s
-      timeout: 3s
+      interval: 10s
+      timeout: 5s
       retries: 12
+      start_period: 10s
+
+    deploy:
+      resources:
+        limits:
+          memory: ${DEPLOY_MEMORY_LIMIT:-512M}
+          cpus: "${DEPLOY_CPUS_LIMIT:-1}"
+        reservations:
+          memory: 256M
+          cpus: "0.15"
 
   minio-init:
     image: minio/mc:latest
     container_name: minio-init
+    restart: "no"
+
     depends_on:
       minio:
         condition: service_healthy
+
     environment:
-      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-admin}
-      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-password}
-      - MINIO_BUCKETS=${MINIO_BUCKETS:-siimut,ikp,data-center,smsp,rbv,lms}
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER:-admin}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:-password}"
+
+      # Pisahkan bucket dengan koma
+      MINIO_BUCKETS: "${MINIO_BUCKETS:-siimut,ikp,data-center,smsp,rbv,lms}"
+
+      # Contoh valid: 1gb, 5gb, 500mb
+      MINIO_BUCKET_QUOTA: "${MINIO_BUCKET_QUOTA:-1gb}"
+
+      # true = file bisa di-download publik tanpa auth
+      # false = bucket private
+      MINIO_PUBLIC_DOWNLOAD: "${MINIO_PUBLIC_DOWNLOAD:-true}"
+
+      # true = set CORS untuk akses dari browser/frontend
+      MINIO_ENABLE_CORS: "${MINIO_ENABLE_CORS:-true}"
+
     entrypoint: ["/bin/sh", "-c"]
+
     command:
       - |
-        echo "⏳ Menunggu MinIO siap..."
-        sleep 2
+        set -eu
 
-        echo "🔧 Mengonfigurasi mc alias..."
-        mc alias set myminio http://minio:9090 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" --api S3v4
+        echo "⏳ Menunggu MinIO siap..."
+
+        until mc alias set myminio http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" --api S3v4 >/dev/null 2>&1; do
+          echo "MinIO belum siap, retry..."
+          sleep 2
+        done
+
+        echo "✅ Alias mc berhasil dikonfigurasi"
 
         OLD_IFS="$$IFS"
-        IFS=','
+        IFS=","
         set -f
+
         for bucket in $${MINIO_BUCKETS}; do
-          bucket="$${bucket}"
-          echo "📦 Memeriksa bucket '$${bucket}'..."
-          if mc ls myminio/$${bucket} >/dev/null 2>&1; then
+          bucket="$$(echo "$${bucket}" | tr -d '[:space:]')"
+
+          if [ -z "$${bucket}" ]; then
+            continue
+          fi
+
+          echo "----------------------------------------"
+          echo "📦 Memproses bucket: $${bucket}"
+
+          if mc ls "myminio/$${bucket}" >/dev/null 2>&1; then
             echo "✅ Bucket '$${bucket}' sudah ada"
           else
             echo "🆕 Membuat bucket '$${bucket}'..."
-            mc mb myminio/$${bucket}
+            mc mb "myminio/$${bucket}"
             echo "✅ Bucket '$${bucket}' berhasil dibuat"
           fi
-          echo "🔓 Mengatur policy PUBLIC (download) untuk bucket..."
-          mc anonymous set download myminio/$${bucket}
-          echo "✅ Bucket '$${bucket}' dapat diakses publik"
 
-          echo "📊 Mengatur quota bucket '$${bucket}' menjadi ${MINIO_BUCKET_QUOTA:-1GB}..."
-          mc admin bucket quota myminio/$${bucket} --hard "${MINIO_BUCKET_QUOTA:-1GB}"
-          echo "✅ Quota bucket '$${bucket}' ditetapkan"
+          if [ "$${MINIO_PUBLIC_DOWNLOAD}" = "true" ]; then
+            echo "🔓 Mengatur policy public download untuk '$${bucket}'..."
+            mc anonymous set download "myminio/$${bucket}"
+            echo "✅ Public download aktif untuk '$${bucket}'"
+          else
+            echo "🔒 Public download dimatikan untuk '$${bucket}'..."
+            mc anonymous set none "myminio/$${bucket}" || true
+            echo "✅ Bucket '$${bucket}' tetap private"
+          fi
+
+          if [ "$${MINIO_ENABLE_CORS}" = "true" ]; then
+            echo "🌐 Mengatur CORS untuk '$${bucket}'..."
+
+            cat > /tmp/cors.json <<EOF
+        {
+          "CORSRules": [
+            {
+              "AllowedOrigins": ["*"],
+              "AllowedHeaders": ["*"],
+              "AllowedMethods": ["GET", "PUT", "POST", "DELETE", "HEAD"],
+              "MaxAgeSeconds": 3000,
+              "ExposeHeaders": ["ETag"]
+            }
+          ]
+        }
+        EOF
+
+            mc cors set "myminio/$${bucket}" /tmp/cors.json || echo "⚠️ Gagal mengatur CORS (mungkin MinIO terbaru sudah mengaturnya secara otomatis)"
+            echo "✅ CORS aktif untuk '$${bucket}'"
+          else
+            echo "⏭️ CORS dilewati untuk '$${bucket}'"
+          fi
+
+          echo "📊 Mengatur quota '$${bucket}' menjadi $${MINIO_BUCKET_QUOTA}..."
+          mc quota set "myminio/$${bucket}" --size "$${MINIO_BUCKET_QUOTA}" || mc admin bucket quota "myminio/$${bucket}" --hard "$${MINIO_BUCKET_QUOTA}" || echo "⚠️ Gagal mengatur quota"
+          echo "✅ Quota '$${bucket}' ditetapkan"
         done
+
         set +f
         IFS="$$OLD_IFS"
+
         echo "✨ Inisialisasi MinIO selesai!"
-    restart: "no"
+
+    networks:
+      - storage-network
 
 volumes:
   minio_data:
+    name: "${MINIO_VOLUME_NAME:-minio_data}"
+
+networks:
+  storage-network:
+    name: "${STORAGE_NETWORK_NAME:-rsch-storage}"
+    driver: bridge

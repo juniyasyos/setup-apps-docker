@@ -5,6 +5,9 @@ services:
   php-app-base:
     pull_policy: missing
     restart: unless-stopped
+    networks:
+      - default
+      - storage-network
     healthcheck:
       test: ["CMD-SHELL", "php -v >/dev/null 2>&1 && php artisan --version >/dev/null 2>&1"]
       interval: 30s
@@ -15,6 +18,9 @@ services:
   php-worker-base:
     pull_policy: missing
     restart: unless-stopped
+    networks:
+      - default
+      - storage-network
     entrypoint: ["php"]
     healthcheck:
       test: ["CMD-SHELL", "php artisan --version >/dev/null 2>&1"]
@@ -26,6 +32,9 @@ services:
   php-scheduler-base:
     pull_policy: missing
     restart: unless-stopped
+    networks:
+      - default
+      - storage-network
     entrypoint: ["php"]
     healthcheck:
       test: ["CMD-SHELL", "php artisan --version >/dev/null 2>&1"]

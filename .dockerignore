@@ -65,7 +65,9 @@ temp/
 # Node / Frontend Build Artifacts
 # ------------------------------------------------------------
 node_modules/
+vendor/
 **/node_modules/
+**/vendor/
 
 .npm/
 .pnpm-store/

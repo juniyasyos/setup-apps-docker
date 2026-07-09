@@ -12,7 +12,7 @@ services:
     env_file:
       - ../../apps/lms/.env.example
     environment:
-      APP_ENV: production
+      APP_ENV: ${APP_ENV:-local}
       APP_DEBUG: "true"
       APP_WORKDIR: /var/www/lms
       PUBLIC_VOLUME: /var/www/lms/public
@@ -28,7 +28,7 @@ services:
       AWS_SECRET_ACCESS_KEY: password
       AWS_BUCKET: lms
       AWS_URL: http://${HOST_IP}:9090/lms
-      AWS_ENDPOINT: http://minio:9090
+      AWS_ENDPOINT: http://minio:9000
       DUMp_LMS_FLAG: "ssl_verify_server_cert=0"
       USE_SSO: "true"
       IAM_ENABLED: "true"
@@ -49,8 +49,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2G
-          cpus: "2"
+          memory: ${DEPLOY_MEMORY_LIMIT:-512M}
+          cpus: "${DEPLOY_CPUS_LIMIT:-1}"
         reservations:
           memory: 1G
           cpus: "1"
@@ -83,8 +83,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 768M
-          cpus: "1"
+          memory: ${DEPLOY_MEMORY_LIMIT:-512M}
+          cpus: "${DEPLOY_CPUS_LIMIT:-1}"
         reservations:
           memory: 256M
           cpus: "0.5"
@@ -112,8 +112,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
-          cpus: "0.4"
+          memory: ${DEPLOY_MEMORY_LIMIT:-512M}
+          cpus: "${DEPLOY_CPUS_LIMIT:-1}"
         reservations:
           memory: 128M
           cpus: "0.2"

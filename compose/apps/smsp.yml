@@ -34,7 +34,7 @@ services:
       AWS_SECRET_ACCESS_KEY: password
       AWS_BUCKET: smsp
       AWS_URL: http://${HOST_IP:-localhost}:9090/smsp
-      AWS_ENDPOINT: http://minio:9090
+      AWS_ENDPOINT: http://minio:9000
       AWS_USE_PATH_STYLE_ENDPOINT: "true"
       USE_SSO: "true"
       IAM_ENABLED: "true"
@@ -58,8 +58,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2G
-          cpus: "2"
+          memory: ${DEPLOY_MEMORY_LIMIT:-512M}
+          cpus: "${DEPLOY_CPUS_LIMIT:-1}"
         reservations:
           memory: 1G
           cpus: "1"
@@ -91,8 +91,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 768M
-          cpus: "1"
+          memory: ${DEPLOY_MEMORY_LIMIT:-512M}
+          cpus: "${DEPLOY_CPUS_LIMIT:-1}"
         reservations:
           memory: 256M
           cpus: "0.5"
@@ -119,8 +119,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
-          cpus: "0.4"
+          memory: ${DEPLOY_MEMORY_LIMIT:-512M}
+          cpus: "${DEPLOY_CPUS_LIMIT:-1}"
         reservations:
           memory: 128M
           cpus: "0.2"
