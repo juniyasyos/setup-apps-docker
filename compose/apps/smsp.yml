@@ -36,8 +36,8 @@ services:
       AWS_URL: http://${HOST_IP:-localhost}:9090/smsp
       AWS_ENDPOINT: http://minio:9000
       AWS_USE_PATH_STYLE_ENDPOINT: "true"
-      USE_SSO: "true"
-      IAM_ENABLED: "true"
+      USE_SSO: "false"
+      IAM_ENABLED: "false"
       IAM_HOST: "http://${HOST_IP:-localhost}:${IAM_HOST_PORT:-8110}"
       IAM_BASE_URL: "http://${HOST_IP:-localhost}:${IAM_HOST_PORT:-8110}"
       IAM_ISSUER: "http://${HOST_IP:-localhost}:${IAM_HOST_PORT:-8110}"
