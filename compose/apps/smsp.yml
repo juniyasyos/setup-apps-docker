@@ -17,7 +17,7 @@ services:
       APP_WORKDIR: /var/www/smsp
       PUBLIC_VOLUME: /var/www/smsp/public
       APP_URL: "http://${HOST_IP:-localhost}:7200"
-      SANCTUM_STATEFUL_DOMAINS: "${HOST_IP:-localhost}:7250,${HOST_IP:-localhost}:7200,localhost,127.0.0.1,127.0.0.1:7250"
+      SANCTUM_STATEFUL_DOMAINS: "192.168.1.9:7250,192.168.1.9:7200,${HOST_IP:-localhost}:7250,${HOST_IP:-localhost}:7200,localhost,127.0.0.1,127.0.0.1:7250"
       TRUSTED_PROXIES: "*"
 
       DB_CONNECTION: mysql
