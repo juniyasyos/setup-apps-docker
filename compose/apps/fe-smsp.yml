@@ -5,7 +5,7 @@ services:
     restart: unless-stopped
 
     env_file:
-      - ../../env/.env.prod.fe-smsp
+      - ../../apps/fe-smsp/.env.example
 
     expose:
       - "80"
