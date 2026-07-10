@@ -49,10 +49,10 @@ services:
     deploy:
       resources:
         limits:
-          memory: ${DEPLOY_MEMORY_LIMIT:-512M}
+          memory: ${DEPLOY_MEMORY_LIMIT:-1G}
           cpus: "${DEPLOY_CPUS_LIMIT:-1}"
         reservations:
-          memory: 1G
+          memory: 512M
           cpus: "1"
 
   queue:
