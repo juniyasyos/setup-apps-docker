@@ -1,0 +1,9 @@
+# Storage Project — Start Database and Minio only
+# Usage: docker compose -f compose/base/storage.yml up -d
+# 
+# Includes: network, database, minio
+
+include:
+  - path: ./network.yml
+  - path: ./database.yml
+  - path: ./minio.yml

@@ -112,6 +112,10 @@ COMMANDS:
     infra down [svc...] Stop and remove infrastructure (or specific services)
     infra stop [svc...] Stop infrastructure without removing containers
     infra restart [svc] Restart infrastructure
+    storage up          Start Database and Minio only
+    storage down        Stop and remove Database and Minio
+    storage stop        Stop Database and Minio
+    storage restart     Restart Database and Minio
 
   Debug & Health:
     logs <app>          Show logs for a specific app
@@ -439,6 +443,47 @@ cmd_infra() {
 }
 
 # ──────────────────────────────────────────────
+# Storage Project (DB & MinIO)
+# ──────────────────────────────────────────────
+cmd_storage() {
+    local action="${1:-}"
+    shift || true
+    local compose_file="${SCRIPT_DIR}/compose/base/storage.yml"
+    case "$action" in
+        up)
+            if [ $# -gt 0 ]; then
+                log_info "Starting storage services ($*) with $(_resolve_mode) env..."
+                $(_compose_cmd "${compose_file}") up -d "$@"
+                log_success "Storage services ($*) started"
+            else
+                log_info "Starting storage services with $(_resolve_mode) env..."
+                $(_compose_cmd "${compose_file}") up -d
+                log_success "Storage started"
+            fi
+            ;;
+        down)
+            log_info "Stopping storage services..."
+            $(_compose_cmd "${compose_file}") down
+            log_success "Storage stopped"
+            ;;
+        stop)
+            log_info "Stopping storage services..."
+            $(_compose_cmd "${compose_file}") stop
+            log_success "Storage stopped"
+            ;;
+        restart)
+            log_info "Restarting storage services..."
+            $(_compose_cmd "${compose_file}") restart
+            log_success "Storage restarted"
+            ;;
+        *)
+            log_error "Usage: ./rsch storage <up|down|stop|restart> [service...]"
+            exit 1
+            ;;
+    esac
+}
+
+# ──────────────────────────────────────────────
 # List
 # ──────────────────────────────────────────────
 cmd_list() {
@@ -484,6 +529,7 @@ case "$COMMAND" in
     logs)       cmd_logs "$@" ;;
     health)     cmd_health "$@" ;;
     infra)      cmd_infra "$@" ;;
+    storage)    cmd_storage "$@" ;;
     list)       cmd_list ;;
     detail)     cmd_detail "$@" ;;
     help|-h|--help) show_help ;;
