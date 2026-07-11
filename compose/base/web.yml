@@ -51,6 +51,9 @@ services:
     container_name: ${STACK_NAME:-multi}-web
     ports: *web-ports
     volumes: *web-volumes
+    networks:
+      - default
+      - storage-network
     restart: unless-stopped
     deploy:
       resources:
