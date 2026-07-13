@@ -288,21 +288,7 @@ append_env_once() {
   } >> "$target"
 }
 
-append_csv_once() {
-  local target="$1"
-  local app_name="$2"
-  local row="$3"
 
-  ensure_dir "$(dirname "$target")"
-  touch "$target"
-
-  if grep -qE "^${app_name}," "$target"; then
-    log_warn "  ${app_name} already exists in repos.csv, skipping"
-    return 0
-  fi
-
-  echo "$row" >> "$target"
-}
 
 # -----------------------------------------------------------------------------
 # Validation
@@ -504,58 +490,84 @@ EOF
 # -----------------------------------------------------------------------------
 create_app_yml_interactive() {
   local app_name="$1"
-  local app_dir="${PROJECT_DIR}/apps/${app_name}"
+cmd_new() {
+  local name="$1"
+
+  if [ -z "$name" ]; then
+    read -r -p "Nama aplikasi baru (tanpa spasi/huruf besar): " name
+  fi
+
+  if [ -z "$name" ]; then
+    die "Nama aplikasi tidak boleh kosong!"
+  fi
+
+  local app_dir="${PROJECT_DIR}/apps/${name}"
   local app_yml="${app_dir}/app.yml"
 
-  log_header "New app: ${app_name}"
-
-  if [ -f "$app_yml" ]; then
-    log_warn "App config already exists: ${app_yml}"
-    read -r -p "Overwrite app.yml? [y/N]: " overwrite
-    if [[ ! "$overwrite" =~ ^[Yy]$ ]]; then
-      log_warn "Cancelled."
-      exit 1
+  if file_exists "$app_yml"; then
+    log_warn "Aplikasi '${name}' sudah ada (app.yml ditemukan)."
+    read -r -p "Overwrite? [y/N]: " confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+      exit 0
     fi
   fi
 
-  local default_port
-  default_port="$(detect_next_port)"
+  log_header "Membuat aplikasi baru: ${name}"
 
-  local name desc repo branch source_dir image version port domain database db_user db_password
-  local has_queue has_scheduler has_prod_env has_local_deps php_version
+  read -r -p "  Deskripsi      [Aplikasi ${name}]: " desc
+  desc="${desc:-Aplikasi ${name}}"
 
-  echo ""
-  echo "Isi detail aplikasi. Tekan Enter untuk memakai default."
-  echo ""
-
-  read -r -p "  Nama app       [${app_name}]: " name
-  name="${name:-$app_name}"
-
-  read -r -p "  Deskripsi      [${name} - Application]: " desc
-  desc="${desc:-${name} - Application}"
-
-  read -r -p "  Git repo URL   [https://github.com/juniyasyos/${name}.git]: " repo
+  read -r -p "  Git Repository [https://github.com/juniyasyos/${name}.git]: " repo
   repo="${repo:-https://github.com/juniyasyos/${name}.git}"
 
-  read -r -p "  Branch         [main]: " branch
+  read -r -p "  Branch default [main]: " branch
   branch="${branch:-main}"
 
-  read -r -p "  Source dir     [${name}]: " source_dir
-  source_dir="${source_dir:-$name}"
+  read -r -p "  App memiliki Frontend mandiri? [y/N]: " has_fe_input
+  local has_fe="false"
+  local fe_same_repo="false"
+  local fe_repo=""
+  local fe_name=""
+  local fe_port=""
+  local fe_source_dir=""
+  local be_source_dir="${name}"
 
-  read -r -p "  Image name     [${name}]: " image
-  image="${image:-$name}"
+  if [[ "$has_fe_input" =~ ^[Yy]$ ]]; then
+    has_fe="true"
+    be_source_dir="${name}/be"
+    fe_source_dir="${name}/fe"
 
-  read -r -p "  Version        [v1.0.0]: " version
+    read -r -p "  Frontend dan Backend di repository (folder) yang sama? [Y/n]: " same_repo_input
+    if [[ "$same_repo_input" =~ ^[Nn]$ ]]; then
+      read -r -p "  Git Repository Frontend: " fe_repo
+    else
+      fe_same_repo="true"
+    fi
+    
+    read -r -p "  Nama app frontend [fe-${name}]: " fe_name
+    fe_name="${fe_name:-fe-${name}}"
+
+    read -r -p "  Port Frontend (ex: 7250): " fe_port
+  fi
+
+  read -r -p "  Source Folder  [${be_source_dir}]: " source_dir
+  source_dir="${source_dir:-${be_source_dir}}"
+
+  read -r -p "  Image Name     [juniyasyos/${name}]: " image
+  image="${image:-juniyasyos/${name}}"
+
+  read -r -p "  Image Version  [v1.0.0]: " version
   version="${version:-v1.0.0}"
 
-  read -r -p "  Port           [${default_port}]: " port
+  local default_port
+  default_port="$(detect_next_port)"
+  read -r -p "  Port Backend   [${default_port}]: " port
   port="${port:-$default_port}"
 
-  read -r -p "  Domain         [${name}.local]: " domain
+  read -r -p "  Domain lokal   [${name}.local]: " domain
   domain="${domain:-${name}.local}"
 
-  read -r -p "  Database name  [${name}_db]: " database
+  read -r -p "  DB name        [${name}_db]: " database
   database="${database:-${name}_db}"
 
   read -r -p "  DB user        [${name}_user]: " db_user
@@ -568,32 +580,16 @@ create_app_yml_interactive() {
   php_version="${php_version:-8.4}"
 
   read -r -p "  Queue worker?  [Y/n]: " has_queue
-  if [[ "$has_queue" =~ ^[Nn]$ ]]; then
-    has_queue="false"
-  else
-    has_queue="true"
-  fi
+  has_queue=$( [[ "$has_queue" =~ ^[Nn]$ ]] && echo "false" || echo "true" )
 
   read -r -p "  Scheduler?     [Y/n]: " has_scheduler
-  if [[ "$has_scheduler" =~ ^[Nn]$ ]]; then
-    has_scheduler="false"
-  else
-    has_scheduler="true"
-  fi
+  has_scheduler=$( [[ "$has_scheduler" =~ ^[Nn]$ ]] && echo "false" || echo "true" )
 
   read -r -p "  Prod env?      [Y/n]: " has_prod_env
-  if [[ "$has_prod_env" =~ ^[Nn]$ ]]; then
-    has_prod_env="false"
-  else
-    has_prod_env="true"
-  fi
+  has_prod_env=$( [[ "$has_prod_env" =~ ^[Nn]$ ]] && echo "false" || echo "true" )
 
   read -r -p "  Local deps?    [y/N]: " has_local_deps
-  if [[ "$has_local_deps" =~ ^[Yy]$ ]]; then
-    has_local_deps="true"
-  else
-    has_local_deps="false"
-  fi
+  has_local_deps=$( [[ "$has_local_deps" =~ ^[Yy]$ ]] && echo "true" || echo "false" )
 
   export \
     APP_NAME="$name" \
@@ -617,6 +613,15 @@ create_app_yml_interactive() {
   ensure_dir "$app_dir"
 
   render_template "${TEMPLATE_DIR}/app-yml.tpl" "$app_yml"
+
+  # Modify app.yml manually for frontend properties
+  if [ "$has_fe" = "true" ]; then
+    echo "has_frontend: true" >> "$app_yml"
+    echo "fe_name: ${fe_name}" >> "$app_yml"
+    echo "fe_repo: ${fe_repo}" >> "$app_yml"
+    echo "fe_source_dir: ${fe_source_dir}" >> "$app_yml"
+    echo "fe_port: ${fe_port}" >> "$app_yml"
+  fi
 
   log_success "Created apps/${name}/app.yml"
 
@@ -792,22 +797,6 @@ append_to_sql_init() {
   log_success "docker/db/sql/00-init-multi-db.sql updated"
 }
 
-append_to_repos_csv() {
-  local target="${PROJECT_DIR}/repos.csv"
-  local prod_flag="no"
-  local deps_flag="no"
-
-  [ "$HAS_PROD_ENV" = "true" ] && prod_flag="yes"
-  [ "$HAS_LOCAL_DEPS" = "true" ] && deps_flag="yes"
-
-  local row="${APP_NAME},${SOURCE_DIR},${APP_REPO},${APP_BRANCH},${prod_flag},${deps_flag},${APP_DESC}"
-
-  log_info "Updating repos.csv"
-
-  append_csv_once "$target" "$APP_NAME" "$row"
-
-  log_success "repos.csv updated"
-}
 
 append_to_env_files() {
   local key="${HOST_PORT_VAR}"
@@ -871,7 +860,6 @@ render_all() {
   append_to_web_base
   append_to_build_compose
   append_to_sql_init
-  append_to_repos_csv
   append_to_env_files
   update_rsch_help
 

@@ -146,7 +146,7 @@ CLI `./rsch` adalah pembungkus perintah Docker Compose. Semua konfigurasi dimuat
 
 | Perintah | Deskripsi | Argumen Tambahan |
 | :--- | :--- | :--- |
-| `list` | Menampilkan semua aplikasi terdaftar di `repos.csv` | - |
+| `list` | Menampilkan semua aplikasi terdaftar di `apps/` | - |
 | `prepare` | Memulai inisialisasi aplikasi baru/lama | `<app>` / `all` / `--no-deps` |
 | `scaffold` | Membuat file boilerplate untuk aplikasi baru | `<new_app>` |
 | `build` | Mengompilasi image Docker lokal untuk aplikasi | `<app>` / `all` [opsional: `push`] |
@@ -362,4 +362,4 @@ server {
 | `compose/base/php-base.yml` | Template setingan dasar PHP PHP-FPM / Worker | Saat ingin mengubah batas memory limit dasar PHP kontainer |
 | `docker/nginx/nginx.conf` | Konfigurasi dasar web server Nginx proxy | Saat ingin mengaktifkan gzip compression atau setting SSL |
 | `docker/db/my.cnf` | Konfigurasi performa database MySQL | Saat tuning query cache database produksi |
-| `repos.csv` | Daftar flat-file registry repositori Git tepercaya | Saat merubah alamat repositori URL Git aplikasi |
+| `apps/<name>/app.yml` | Konfigurasi metadata aplikasi, repositori Git, dan port | Saat menambah aplikasi baru atau mengubah parameter |

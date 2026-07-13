@@ -96,7 +96,7 @@ WORKDIR /build
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 # Copy only composer files first for caching
-COPY site/${APP_DIR}/composer.json site/${APP_DIR}/composer.lock* ./
+COPY sources/${APP_DIR}/composer.json sources/${APP_DIR}/composer.lock* ./
 
 RUN set -eux; \
     apk add --no-cache git; \
@@ -114,7 +114,7 @@ RUN set -eux; \
     rm -rf "$COMPOSER_CACHE_DIR" /root/.composer /tmp/*
 
 # Copy entire application code
-COPY site/${APP_DIR}/ ./
+COPY sources/${APP_DIR}/ ./
 
 # Finalize: dump autoloader and optimize, remove dev files
 RUN set -eux; \

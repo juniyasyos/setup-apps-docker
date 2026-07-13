@@ -153,7 +153,7 @@ WORKDIR /build
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 # Copy composer files first for better layer cache
-COPY site/${APP_DIR}/composer.json site/${APP_DIR}/composer.lock* ./
+COPY sources/${APP_DIR}/composer.json sources/${APP_DIR}/composer.lock* ./
 
 # Install production dependencies only
 RUN set -eux; \
@@ -168,7 +168,7 @@ RUN set -eux; \
     rm -rf "$COMPOSER_CACHE_DIR" /root/.composer /tmp/*
 
 # Copy application source
-COPY site/${APP_DIR}/ ./
+COPY sources/${APP_DIR}/ ./
 
 # Remove files that should not exist in production image
 RUN set -eux; \

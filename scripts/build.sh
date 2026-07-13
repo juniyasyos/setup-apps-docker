@@ -123,12 +123,18 @@ with open('$file') as f:
 # Get list of all app names (from app.yml `name` field)
 discover_apps() {
     local apps=()
-    local app_yml name
+    local app_yml name has_fe fe_name
     for app_yml in "$APPS_DIR"/*/app.yml; do
         [ -f "$app_yml" ] || continue
         name=$(yaml_read "$app_yml" "name" || true)
         [ -n "$name" ] || continue
         apps+=("$name")
+        
+        has_fe=$(yaml_read "$app_yml" "has_frontend" | tr '[:upper:]' '[:lower:]' || true)
+        if [ "$has_fe" = "true" ] || [ "$has_fe" = "yes" ] || [ "$has_fe" = "1" ]; then
+            fe_name=$(yaml_read "$app_yml" "fe_name" || true)
+            [ -n "$fe_name" ] && apps+=("$fe_name")
+        fi
     done
     echo "${apps[@]}"
 }
@@ -137,9 +143,10 @@ discover_apps() {
 app_config() {
     local app_name="$1" key="$2"
     local app_yml="$APPS_DIR/$app_name/app.yml"
+    local prefix=""
 
     if [ ! -f "$app_yml" ]; then
-        # Fallback: search by name field
+        # Fallback: search by name field or fe_name field
         local f
         for f in "$APPS_DIR"/*/app.yml; do
             [ -f "$f" ] || continue
@@ -147,9 +154,15 @@ app_config() {
                 app_yml="$f"
                 break
             fi
+            if [ "$(yaml_read "$f" "fe_name" || true)" = "$app_name" ]; then
+                app_yml="$f"
+                prefix="fe_"
+                break
+            fi
         done
     fi
 
+    [ -n "$prefix" ] && key="${prefix}${key}"
     yaml_read "$app_yml" "$key" || true
 }
 
@@ -182,7 +195,6 @@ get_compose_service() {
     echo "${full##*/}"
 }
 
-# Find an app by CLI target (case-insensitive match against name, directory, image_short)
 resolve_app_target() {
     local target="$1"
 
@@ -203,6 +215,19 @@ resolve_app_target() {
         if [ "$name" = "$target" ] || [ "$dirname" = "$target" ] || [ "$image_short" = "$target" ]; then
             echo "$name"
             return 0
+        fi
+        
+        local has_fe fe_name fe_image_full fe_image_short
+        has_fe=$(yaml_read "$app_yml" "has_frontend" | tr '[:upper:]' '[:lower:]' || true)
+        if [ "$has_fe" = "true" ] || [ "$has_fe" = "yes" ] || [ "$has_fe" = "1" ]; then
+            fe_name=$(yaml_read "$app_yml" "fe_name" || true)
+            fe_image_full=$(yaml_read "$app_yml" "fe_image" || true)
+            fe_image_short="${fe_image_full##*/}"
+            
+            if [ "$fe_name" = "$target" ] || [ "$fe_image_short" = "$target" ]; then
+                echo "$fe_name"
+                return 0
+            fi
         fi
     done
 
@@ -426,52 +451,58 @@ NOTES:
 EOF
 }
 
-# ============================================
-# Argument Parsing
-# ============================================
+APPS=()
+ACTIONS=()
 
-APP="${1:-}"
-ACTION="${2:-build}"
+for arg in "$@"; do
+    case "$arg" in
+        build|tag|push|help|--help|-h)
+            ACTIONS+=("$arg")
+            ;;
+        *)
+            APPS+=("$arg")
+            ;;
+    esac
+done
 
-# Validate action
-case "$ACTION" in
-    build|tag|push|help|--help|-h) ;;
-    *)
-        # If second arg is not a known action, treat first as app and second as action
-        # But that's already the case — just validate
-        log_error "Unknown command: $ACTION"
-        echo ""
-        show_help
-        exit 1
-        ;;
-esac
+if [ ${#ACTIONS[@]} -eq 0 ]; then
+    ACTIONS=("build")
+fi
 
-# Handle help immediately
-if [ "$APP" = "help" ] || [ "$APP" = "--help" ] || [ "$APP" = "-h" ] || [ "$ACTION" = "help" ]; then
+ACTION="${ACTIONS[0]}"
+
+if [ "$ACTION" = "help" ] || [ "$ACTION" = "--help" ] || [ "$ACTION" = "-h" ]; then
     show_help
     exit 0
 fi
 
-# Resolve app target — if ACTION is a known command and APP wasn't set,
-# treat the first positional as the default app (siimut/next)
-if [ -z "$APP" ] || [ "$APP" = "build" ] || [ "$APP" = "tag" ] || [ "$APP" = "push" ]; then
-    # User ran e.g. "./build.sh push" — use default app
+APP_TARGETS=()
+if [ ${#APPS[@]} -eq 0 ]; then
     ALL_APPS=( $(discover_apps) )
     if [ ${#ALL_APPS[@]} -eq 0 ]; then
         log_error "No apps found in $APPS_DIR/*/app.yml"
         exit 1
     fi
-    DEFAULT_APP="${ALL_APPS[0]}"
-    APP_TARGETS=( "$DEFAULT_APP" )
+    APP_TARGETS=( "${ALL_APPS[0]}" )
 else
-    APP_TARGETS=( $(resolve_targets "$APP") )
-fi
-
-if [ ${#APP_TARGETS[@]} -eq 0 ]; then
-    log_error "Unknown app target: $APP"
-    echo ""
-    show_help
-    exit 1
+    for app in "${APPS[@]}"; do
+        if [ "$app" = "all" ]; then
+            APP_TARGETS=( $(discover_apps) )
+            break
+        else
+            resolved=$(resolve_targets "$app") || true
+            if [ -n "$resolved" ]; then
+                for r in $resolved; do
+                    APP_TARGETS+=("$r")
+                done
+            else
+                log_error "Unknown app target: $app"
+                echo ""
+                show_help
+                exit 1
+            fi
+        fi
+    done
 fi
 
 # ============================================

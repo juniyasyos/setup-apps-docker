@@ -65,9 +65,7 @@ temp/
 # Node / Frontend Build Artifacts
 # ------------------------------------------------------------
 node_modules/
-vendor/
-**/node_modules/
-**/vendor/
+/source/*/node_modules/
 
 .npm/
 .pnpm-store/
@@ -100,6 +98,10 @@ auth.json
 # ------------------------------------------------------------
 # Laravel Runtime Files
 # ------------------------------------------------------------
+vendor/
+/source/*/vendor/
+/source/*/node_modules/
+
 **/storage/logs/*
 **/storage/framework/cache/*
 **/storage/framework/sessions/*

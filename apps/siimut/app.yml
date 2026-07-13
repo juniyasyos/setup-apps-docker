@@ -1,5 +1,6 @@
 # SIIMUT — Sistem Informasi Imunisasi
 name: siimut
+role: standalone
 repo: https://github.com/juniyasyos/si-imut.git
 branch: main
 source_dir: siimut

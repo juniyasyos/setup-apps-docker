@@ -158,28 +158,128 @@ cmd_scaffold() {
 }
 
 # ──────────────────────────────────────────────
+# Fullstack Helpers
+# ──────────────────────────────────────────────
+_get_role() {
+    local app="$1"
+    grep -E "^role:" "${SCRIPT_DIR}/apps/${app}/app.yml" 2>/dev/null \
+        | awk '{print $2}' | tr -d '\r"' || echo "standalone"
+}
+
+_has_frontend() {
+    local app="$1"
+    grep -E "^has_frontend:" "${SCRIPT_DIR}/apps/${app}/app.yml" 2>/dev/null \
+        | awk '{print $2}' | tr -d '\r"' | tr '[:upper:]' '[:lower:]' || echo "false"
+}
+
+_get_fe_name() {
+    local app="$1"
+    grep -E "^fe_name:" "${SCRIPT_DIR}/apps/${app}/app.yml" 2>/dev/null \
+        | awk '{print $2}' | tr -d '\r"' || echo ""
+}
+
+_expand_app_services() {
+    local app="$1"
+    local target_be="${2:-true}"
+    local target_fe="${3:-true}"
+    
+    local has_fe; has_fe="$(_has_frontend "$app")"
+    local fe_name; fe_name="$(_get_fe_name "$app")"
+    
+    local result=()
+    if [ "$target_be" = "true" ] || [ "$target_be" = "1" ]; then
+        result+=("$app")
+    fi
+    if { [ "$target_fe" = "true" ] || [ "$target_fe" = "1" ]; } && { [ "$has_fe" = "true" ] || [ "$has_fe" = "yes" ] || [ "$has_fe" = "1" ]; } && [ -n "$fe_name" ]; then
+        result+=("$fe_name")
+    fi
+    echo "${result[@]}"
+}
+
+_show_fullstack_summary() {
+    local be_app="$1"
+    local fe_app="$2"
+
+    local be_repo fe_repo be_port fe_port be_branch fe_branch
+    be_repo=$(grep -E "^repo:" "${SCRIPT_DIR}/apps/${be_app}/app.yml" 2>/dev/null | awk '{print $2}' | tr -d '\r"' || echo "-")
+    fe_repo=$(grep -E "^fe_repo:" "${SCRIPT_DIR}/apps/${be_app}/app.yml" 2>/dev/null | awk '{print $2}' | tr -d '\r"' || echo "-")
+    be_port=$(grep -E "^port:" "${SCRIPT_DIR}/apps/${be_app}/app.yml" 2>/dev/null | awk '{print $2}' | tr -d '\r"' || echo "-")
+    fe_port=$(grep -E "^fe_port:" "${SCRIPT_DIR}/apps/${be_app}/app.yml" 2>/dev/null | awk '{print $2}' | tr -d '\r"' || echo "-")
+    be_branch=$(grep -E "^branch:" "${SCRIPT_DIR}/apps/${be_app}/app.yml" 2>/dev/null | awk '{print $2}' | tr -d '\r"' || echo "main")
+    fe_branch=$(grep -E "^fe_branch:" "${SCRIPT_DIR}/apps/${be_app}/app.yml" 2>/dev/null | awk '{print $2}' | tr -d '\r"' || echo "main")
+
+    echo ""
+    echo -e "${CYAN}══════════════════════════════════════════════════════════════${NC}"
+    echo -e "  ${BLUE}🔗 FULLSTACK PROJECT: ${YELLOW}${be_app}${NC}"
+    echo -e "${CYAN}══════════════════════════════════════════════════════════════${NC}"
+    echo ""
+    echo -e "  ${CYAN}Backend  (BE)${NC}: ${be_app}"
+    echo -e "    • Repo   : ${be_repo}"
+    echo -e "    • Branch : ${be_branch}"
+    echo -e "    • Port   : ${be_port}"
+    echo ""
+    echo -e "  ${CYAN}Frontend (FE)${NC}: ${fe_app}"
+    echo -e "    • Repo   : ${fe_repo}"
+    echo -e "    • Branch : ${fe_branch}"
+    echo -e "    • Port   : ${fe_port}"
+    echo ""
+    echo -e "  ${BLUE}📋 Detail per komponen:${NC}"
+    echo -e "    ${YELLOW}./rsch detail ${be_app}${NC}   → detail aplikasi"
+    echo ""
+    echo -e "  ${BLUE}⚙️  Perintah CLI:${NC}"
+    echo -e "    ${YELLOW}./rsch prepare  ${be_app}${NC}   → prepare BE + FE"
+    echo -e "    ${YELLOW}./rsch run-app  ${be_app}${NC}   → start BE + FE"
+    echo -e "    ${YELLOW}./rsch down-app ${be_app}${NC}   → stop BE + FE"
+    echo -e "    ${YELLOW}./rsch restart  ${be_app}${NC}   → restart BE + FE"
+    echo -e "    Tambahkan argumen --be atau --fe untuk menargetkan spesifik komponen."
+    echo -e "${CYAN}══════════════════════════════════════════════════════════════${NC}"
+    echo ""
+}
+
+# ──────────────────────────────────────────────
 # Run App — start specific app(s) by name
 # Usage: ./rsch run-app siimut ikp iam
 # ──────────────────────────────────────────────
 cmd_run_app() {
     if [ $# -eq 0 ]; then
-        log_error "Usage: ./rsch run-app <app> [app ...]"
+        log_error "Usage: ./rsch run-app <app> [app ...] [--be|--fe]"
         echo ""
         local available_apps
-        available_apps=$(ls -1 "${SCRIPT_DIR}/apps" 2>/dev/null | paste -sd, - | sed 's/,/, /g' || echo "siimut, ikp, iam, lms, smsp, rbv, fe-smsp")
+        available_apps=$(ls -1 "${SCRIPT_DIR}/apps" 2>/dev/null | paste -sd, - | sed 's/,/, /g' || echo "siimut, ikp, iam, lms, smsp, rbv")
         log_info "Available apps: ${available_apps}"
         log_info "Example: ./rsch run-app siimut ikp iam"
         exit 1
     fi
 
+    local target_be=true
+    local target_fe=true
+    local apps=()
+    for arg in "$@"; do
+        if [ "$arg" = "--be" ]; then
+            target_fe=false
+        elif [ "$arg" = "--fe" ]; then
+            target_be=false
+        else
+            apps+=("$arg")
+        fi
+    done
+
+    local all_apps=()
+    for app in "${apps[@]}"; do
+        read -ra expanded <<< "$(_expand_app_services "$app" "$target_be" "$target_fe")"
+        for ea in "${expanded[@]}"; do
+            [[ " ${all_apps[*]} " == *" $ea "* ]] || all_apps+=("$ea")
+        done
+    done
+
     local services=()
-    for app in "$@"; do
+    for app in "${all_apps[@]}"; do
         services+=("app-${app}")
         grep -q -E "^queue:\s*true" "${SCRIPT_DIR}/apps/${app}/app.yml" 2>/dev/null && services+=("queue-${app}")
         grep -q -E "^scheduler:\s*true" "${SCRIPT_DIR}/apps/${app}/app.yml" 2>/dev/null && services+=("scheduler-${app}")
         
         # Clear local and volume cache before starting
-        rm -f "${SCRIPT_DIR}/site/${app}/bootstrap/cache/"*.php 2>/dev/null || true
+        rm -f "${SCRIPT_DIR}/sources/${app}/bootstrap/cache/"*.php 2>/dev/null || true
         docker volume rm "base_${app}_bootstrap_cache" >/dev/null 2>&1 || true
     done
 
@@ -195,33 +295,47 @@ cmd_run_app() {
 # ──────────────────────────────────────────────
 cmd_down_app() {
     if [ $# -eq 0 ]; then
-        log_error "Usage: ./rsch down-app <app> [app ...] [-v]"
+        log_error "Usage: ./rsch down-app <app> [app ...] [-v] [--be|--fe]"
         echo ""
         local available_apps
-        available_apps=$(ls -1 "${SCRIPT_DIR}/apps" 2>/dev/null | paste -sd, - | sed 's/,/, /g' || echo "siimut, ikp, iam, lms, smsp, rbv, fe-smsp")
+        available_apps=$(ls -1 "${SCRIPT_DIR}/apps" 2>/dev/null | paste -sd, - | sed 's/,/, /g' || echo "siimut, ikp, iam, lms, smsp, rbv")
         log_info "Available apps: ${available_apps}"
         log_info "Example: ./rsch down-app siimut ikp"
         log_info "         ./rsch down-app siimut -v"
         exit 1
     fi
 
+    local target_be=true
+    local target_fe=true
     local apps=()
     local remove_volumes=false
     for arg in "$@"; do
         if [ "$arg" = "-v" ]; then
             remove_volumes=true
+        elif [ "$arg" = "--be" ]; then
+            target_fe=false
+        elif [ "$arg" = "--fe" ]; then
+            target_be=false
         else
             apps+=("$arg")
         fi
     done
 
     if [ ${#apps[@]} -eq 0 ]; then
-        log_error "Usage: ./rsch down-app <app> [app ...] [-v]"
+        log_error "Usage: ./rsch down-app <app> [app ...] [-v] [--be|--fe]"
         exit 1
     fi
 
-    local services=()
+    local all_apps=()
     for app in "${apps[@]}"; do
+        read -ra expanded <<< "$(_expand_app_services "$app" "$target_be" "$target_fe")"
+        for ea in "${expanded[@]}"; do
+            [[ " ${all_apps[*]} " == *" $ea "* ]] || all_apps+=("$ea")
+        done
+    done
+
+    local services=()
+    for app in "${all_apps[@]}"; do
         services+=("app-${app}")
         grep -q -E "^queue:\s*true" "${SCRIPT_DIR}/apps/${app}/app.yml" 2>/dev/null && services+=("queue-${app}")
         grep -q -E "^scheduler:\s*true" "${SCRIPT_DIR}/apps/${app}/app.yml" 2>/dev/null && services+=("scheduler-${app}")
@@ -238,8 +352,8 @@ cmd_down_app() {
     fi
 
     # Explicitly clear bootstrap cache volume and local cache files
-    for app in "${apps[@]}"; do
-        rm -f "${SCRIPT_DIR}/site/${app}/bootstrap/cache/"*.php 2>/dev/null || true
+    for app in "${all_apps[@]}"; do
+        rm -f "${SCRIPT_DIR}/sources/${app}/bootstrap/cache/"*.php 2>/dev/null || true
         docker volume rm "base_${app}_bootstrap_cache" >/dev/null 2>&1 || true
     done
 
@@ -253,7 +367,43 @@ cmd_down_app() {
 # Build
 # ──────────────────────────────────────────────
 cmd_build() {
-    "${SCRIPT_DIR}/scripts/build.sh" "$@"
+    local target_be=true
+    local target_fe=true
+    local apps=()
+    local actions=()
+
+    for arg in "$@"; do
+        if [ "$arg" = "--be" ]; then
+            target_fe=false
+        elif [ "$arg" = "--fe" ]; then
+            target_be=false
+        elif [ "$arg" = "build" ] || [ "$arg" = "push" ] || [ "$arg" = "tag" ]; then
+            actions+=("$arg")
+        else
+            apps+=("$arg")
+        fi
+    done
+
+    if [ ${#apps[@]} -eq 0 ]; then
+        # Default to all apps if no specific apps mentioned, but build.sh handles default app.
+        # However, to expand them properly we should pass them down. Let's just pass what was given if empty
+        "${SCRIPT_DIR}/scripts/build.sh" "$@"
+        return
+    fi
+
+    local all_apps=()
+    for app in "${apps[@]}"; do
+        if [ "$app" = "all" ]; then
+            all_apps+=("all")
+        else
+            read -ra expanded <<< "$(_expand_app_services "$app" "$target_be" "$target_fe")"
+            for ea in "${expanded[@]}"; do
+                [[ " ${all_apps[*]} " == *" $ea "* ]] || all_apps+=("$ea")
+            done
+        fi
+    done
+
+    "${SCRIPT_DIR}/scripts/build.sh" "${all_apps[@]}" "${actions[@]}"
 }
 
 # ──────────────────────────────────────────────
@@ -311,14 +461,41 @@ cmd_use() {
 # Restart single app
 # ──────────────────────────────────────────────
 cmd_restart() {
-    local app="${1:-}"
-    if [ -z "$app" ]; then
-        log_error "Usage: ./rsch restart <app>"
+    if [ $# -eq 0 ]; then
+        log_error "Usage: ./rsch restart <app> [--be|--fe]"
         exit 1
     fi
-    local services=("app-${app}")
-    grep -q -E "^queue:\s*true" "${SCRIPT_DIR}/apps/${app}/app.yml" 2>/dev/null && services+=("queue-${app}")
-    grep -q -E "^scheduler:\s*true" "${SCRIPT_DIR}/apps/${app}/app.yml" 2>/dev/null && services+=("scheduler-${app}")
+
+    local target_be=true
+    local target_fe=true
+    local app=""
+    for arg in "$@"; do
+        if [ "$arg" = "--be" ]; then
+            target_fe=false
+        elif [ "$arg" = "--fe" ]; then
+            target_be=false
+        elif [ -z "$app" ]; then
+            app="$arg"
+        fi
+    done
+
+    if [ -z "$app" ]; then
+        log_error "Usage: ./rsch restart <app> [--be|--fe]"
+        exit 1
+    fi
+
+    local all_apps=()
+    read -ra expanded <<< "$(_expand_app_services "$app" "$target_be" "$target_fe")"
+    for ea in "${expanded[@]}"; do
+        all_apps+=("$ea")
+    done
+
+    local services=()
+    for a in "${all_apps[@]}"; do
+        services+=("app-${a}")
+        grep -q -E "^queue:\s*true" "${SCRIPT_DIR}/apps/${a}/app.yml" 2>/dev/null && services+=("queue-${a}")
+        grep -q -E "^scheduler:\s*true" "${SCRIPT_DIR}/apps/${a}/app.yml" 2>/dev/null && services+=("scheduler-${a}")
+    done
     
     log_info "Restarting ${services[*]}..."
     $(_compose_cmd) restart "${services[@]}"
@@ -495,11 +672,29 @@ cmd_list() {
 # ──────────────────────────────────────────────
 cmd_detail() {
     local app="${1:-}"
+    local filter="${2:-}"
     if [ -z "$app" ]; then
-        log_error "Usage: ./rsch detail <app>"
+        log_error "Usage: ./rsch detail <app> [--be|--fe]"
         exit 1
     fi
-    "${SCRIPT_DIR}/scripts/prepare.sh" detail "$app"
+
+    local has_fe; has_fe="$(_has_frontend "$app")"
+    local fe_name; fe_name="$(_get_fe_name "$app")"
+    local pair=""
+    if [[ "$has_fe" == "true" || "$has_fe" == "yes" ]] && [ -n "$fe_name" ]; then
+        pair="$fe_name"
+    fi
+
+    if [ -z "$pair" ]; then
+        "${SCRIPT_DIR}/scripts/prepare.sh" detail "$app"
+        return
+    fi
+
+    case "$filter" in
+        --be) "${SCRIPT_DIR}/scripts/prepare.sh" detail "$app" ;;
+        --fe) "${SCRIPT_DIR}/scripts/prepare.sh" detail "$pair" ;;
+        *)    _show_fullstack_summary "$app" "$pair" ;;
+    esac
 }
 
 # ──────────────────────────────────────────────

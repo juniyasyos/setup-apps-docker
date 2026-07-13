@@ -152,7 +152,7 @@ WORKDIR /build
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 # Copy composer files first for cache
-COPY site/${APP_DIR}/composer.json site/${APP_DIR}/composer.lock* ./
+COPY sources/${APP_DIR}/composer.json sources/${APP_DIR}/composer.lock* ./
 
 RUN set -eux; \
     composer install \
@@ -169,7 +169,7 @@ RUN set -eux; \
         /tmp/*
 
 # Copy app source
-COPY site/${APP_DIR}/ ./
+COPY sources/${APP_DIR}/ ./
 
 # Clean unnecessary files from final app payload
 RUN set -eux; \

@@ -19,13 +19,12 @@ set -euo pipefail
 #   ./prepare.sh all                # Prepare all apps
 #   ./prepare.sh <app> --no-deps    # Skip dependency install & npm build
 #
-# For NEW apps (not in repos.csv):
+# For NEW apps (not in apps/<name>/app.yml):
 #   ./prepare.sh <new-app>          # Interactive scaffolding then prepare
 # =========================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-REPOS_FILE="${PROJECT_DIR}/repos.csv"
 
 # ============================================
 # Source libraries
@@ -58,8 +57,7 @@ log_warn()    { echo -e "${YELLOW}⚠️  $1${NC}"; }
 log_error()   { echo -e "${RED}❌ $1${NC}"; }
 log_header()  { echo -e "\n${CYAN}════════════════════════════════════════════${NC}"; echo -e "${CYAN}   $1${NC}"; echo -e "${CYAN}════════════════════════════════════════════${NC}"; }
 
-# ============================================
-# App Configuration from repos.csv
+# App Configuration from app.yml (Single Source of Truth)
 # ============================================
 APP_NAMES=()
 APP_DIRS=()
@@ -72,16 +70,44 @@ APP_DESCS=()
 load_all_apps() {
     APP_NAMES=(); APP_DIRS=(); APP_REPOS=(); APP_BRANCHES=()
     APP_HAS_PROD=(); APP_HAS_DEPS=(); APP_DESCS=()
+    APP_ROLES=(); APP_PAIRS=()
 
-    if [ ! -f "$REPOS_FILE" ]; then
-        log_error "Configuration file not found: $REPOS_FILE"
+    local apps_dir="${PROJECT_DIR}/apps"
+    if [ ! -d "$apps_dir" ]; then
+        log_error "Apps directory not found: $apps_dir"
         exit 1
     fi
 
-    while IFS=',' read -r name dir repo branch has_prod has_deps desc; do
-        # Skip empty lines and comments
+    for app_yml in "${apps_dir}"/*/app.yml; do
+        [ -f "$app_yml" ] || continue
+        
+        local name dir repo branch has_prod has_deps desc
+        name=$(grep -E "^name:" "$app_yml" | awk '{print $2}' | tr -d '\r"' || echo "")
         [ -z "$name" ] && continue
-        [[ "$name" =~ ^[[:space:]]*# ]] && continue
+
+        dir=$(grep -E "^source_dir:" "$app_yml" | awk '{print $2}' | tr -d '\r"' || echo "$name")
+        repo=$(grep -E "^repo:" "$app_yml" | awk '{print $2}' | tr -d '\r"' || echo "")
+        branch=$(grep -E "^branch:" "$app_yml" | awk '{print $2}' | tr -d '\r"' || echo "main")
+        
+        has_prod=$(grep -E "^has_prod_env:" "$app_yml" | awk '{print $2}' | tr -d '\r"' | tr '[:upper:]' '[:lower:]' || echo "false")
+        if [[ "$has_prod" == "true" || "$has_prod" == "yes" || "$has_prod" == "1" ]]; then has_prod="yes"; else has_prod="no"; fi
+
+        has_deps=$(grep -E "^has_local_deps:" "$app_yml" | awk '{print $2}' | tr -d '\r"' | tr '[:upper:]' '[:lower:]' || echo "false")
+        if [[ "$has_deps" == "true" || "$has_deps" == "yes" || "$has_deps" == "1" ]]; then has_deps="yes"; else has_deps="no"; fi
+
+        desc=$(grep -E "^description:" "$app_yml" | sed 's/^description:[[:space:]]*//' | tr -d '\r"' || echo "$name")
+        
+        local role pair has_fe fe_name
+        role=$(grep -E "^role:" "$app_yml" | awk '{print $2}' | tr -d '\r"' || echo "standalone")
+        
+        has_fe=$(grep -E "^has_frontend:" "$app_yml" | awk '{print $2}' | tr -d '\r"' | tr '[:upper:]' '[:lower:]' || echo "false")
+        fe_name=$(grep -E "^fe_name:" "$app_yml" | awk '{print $2}' | tr -d '\r"' || echo "")
+        
+        if [[ "$has_fe" == "true" || "$has_fe" == "yes" || "$has_fe" == "1" ]] && [ -n "$fe_name" ]; then
+            pair="$fe_name"
+        else
+            pair=""
+        fi
 
         APP_NAMES+=("$name")
         APP_DIRS+=("$dir")
@@ -90,14 +116,39 @@ load_all_apps() {
         APP_HAS_PROD+=("$has_prod")
         APP_HAS_DEPS+=("$has_deps")
         APP_DESCS+=("$desc")
-    done < "$REPOS_FILE"
+        APP_ROLES+=("$role")
+        APP_PAIRS+=("$pair")
+
+        if [[ "$has_fe" == "true" || "$has_fe" == "yes" || "$has_fe" == "1" ]] && [ -n "$fe_name" ]; then
+            local fe_dir fe_repo fe_branch fe_has_prod fe_has_deps fe_desc
+            fe_dir=$(grep -E "^fe_source_dir:" "$app_yml" | awk '{print $2}' | tr -d '\r"' || echo "$fe_name")
+            fe_repo=$(grep -E "^fe_repo:" "$app_yml" | awk '{print $2}' | tr -d '\r"' || echo "")
+            fe_branch=$(grep -E "^fe_branch:" "$app_yml" | awk '{print $2}' | tr -d '\r"' || echo "main")
+            
+            fe_has_prod=$(grep -E "^fe_has_prod_env:" "$app_yml" | awk '{print $2}' | tr -d '\r"' | tr '[:upper:]' '[:lower:]' || echo "false")
+            if [[ "$fe_has_prod" == "true" || "$fe_has_prod" == "yes" || "$fe_has_prod" == "1" ]]; then fe_has_prod="yes"; else fe_has_prod="no"; fi
+            
+            fe_has_deps=$(grep -E "^fe_has_local_deps:" "$app_yml" | awk '{print $2}' | tr -d '\r"' | tr '[:upper:]' '[:lower:]' || echo "false")
+            if [[ "$fe_has_deps" == "true" || "$fe_has_deps" == "yes" || "$fe_has_deps" == "1" ]]; then fe_has_deps="yes"; else fe_has_deps="no"; fi
+            
+            fe_desc=$(grep -E "^fe_description:" "$app_yml" | sed 's/^fe_description:[[:space:]]*//' | tr -d '\r"' || echo "$fe_name")
+            
+            APP_NAMES+=("$fe_name")
+            APP_DIRS+=("$fe_dir")
+            APP_REPOS+=("$fe_repo")
+            APP_BRANCHES+=("$fe_branch")
+            APP_HAS_PROD+=("$fe_has_prod")
+            APP_HAS_DEPS+=("$fe_has_deps")
+            APP_DESCS+=("$fe_desc")
+            APP_ROLES+=("frontend")
+            APP_PAIRS+=("$name")
+        fi
+    done
 }
 
-# Check if app exists in repos.csv
 app_exists_in_repos() {
     local target="$1"
     load_all_apps
-
     for i in "${!APP_NAMES[@]}"; do
         if [ "${APP_NAMES[$i]}" = "$target" ]; then
             return 0
@@ -144,14 +195,16 @@ get_app_status() {
     fi
 
     # 1. Cloned
-    if [ -d "${PROJECT_DIR}/site/${dir}" ]; then
+    if [ -d "${PROJECT_DIR}/sources/${dir}" ]; then
         c_cloned="Yes "
     fi
 
-    # 2. Dockerfile — priority: apps/${name}/ > docker/${name}/ > site/${dir}/
-    if [ -f "${PROJECT_DIR}/apps/${name}/Dockerfile" ]; then
+    # 2. Dockerfile — priority: apps/${name}/be.Dockerfile > apps/${name}/Dockerfile > docker/${name}/Dockerfile > sources/${dir}/Dockerfile
+    if [ -f "${PROJECT_DIR}/apps/${name}/be.Dockerfile" ]; then
         c_dockerfile="OK  "
-    elif [ -f "${PROJECT_DIR}/docker/${name}/Dockerfile" ] || [ -f "${PROJECT_DIR}/site/${dir}/Dockerfile" ]; then
+    elif [ -f "${PROJECT_DIR}/apps/${name}/Dockerfile" ]; then
+        c_dockerfile="OK  "
+    elif [ -f "${PROJECT_DIR}/docker/${name}/Dockerfile" ] || [ -f "${PROJECT_DIR}/sources/${dir}/Dockerfile" ]; then
         c_dockerfile="OK  "
     fi
 
@@ -161,7 +214,7 @@ get_app_status() {
     fi
 
     # 4. Env file
-    if [ -f "${PROJECT_DIR}/site/${dir}/.env" ]; then
+    if [ -f "${PROJECT_DIR}/sources/${dir}/.env" ]; then
         c_env="OK  "
     fi
 
@@ -291,14 +344,17 @@ show_app_detail() {
     # Status check of files
     local df_status="Missing"
     local df_path="apps/${target}/Dockerfile"
-    if [ -f "${PROJECT_DIR}/apps/${target}/Dockerfile" ]; then
+    if [ -f "${PROJECT_DIR}/apps/${target}/be.Dockerfile" ]; then
+        df_status="Ready"
+        df_path="apps/${target}/be.Dockerfile"
+    elif [ -f "${PROJECT_DIR}/apps/${target}/Dockerfile" ]; then
         df_status="Ready"
     elif [ -f "${PROJECT_DIR}/docker/${target}/Dockerfile" ]; then
         df_status="Ready"
         df_path="docker/${target}/Dockerfile"
-    elif [ -f "${PROJECT_DIR}/site/${APP_DIR}/Dockerfile" ]; then
+    elif [ -f "${PROJECT_DIR}/sources/${APP_DIR}/Dockerfile" ]; then
         df_status="Ready"
-        df_path="site/${APP_DIR}/Dockerfile"
+        df_path="sources/${APP_DIR}/Dockerfile"
     fi
 
     local nginx_status="Missing"
@@ -311,7 +367,7 @@ show_app_detail() {
     fi
 
     local env_status="Missing"
-    local env_path="site/${APP_DIR}/.env"
+    local env_path="sources/${APP_DIR}/.env"
     if [ -f "${PROJECT_DIR}/${env_path}" ]; then
         env_status="Ready"
     fi
@@ -365,7 +421,7 @@ show_app_detail() {
     echo -e "    • Internal Port: ${port}"
     echo ""
     echo -e "  ${BLUE}📁 Path & Konfigurasi:${NC}"
-    echo -e "    • Source Code  : site/${APP_DIR}  $([ -d "${PROJECT_DIR}/site/${APP_DIR}" ] && echo -e "(${GREEN}Cloned${NC})" || echo -e "(${RED}Not Cloned${NC})")"
+    echo -e "    • Source Code  : sources/${APP_DIR}  $([ -d "${PROJECT_DIR}/sources/${APP_DIR}" ] && echo -e "(${GREEN}Cloned${NC})" || echo -e "(${RED}Not Cloned${NC})")"
     echo -e "    • Dockerfile   : ${df_path}  $([ "${df_status}" = "Ready" ] && echo -e "(${GREEN}✓ Ada${NC})" || echo -e "(${RED}✗ Belum ada${NC})")"
     echo -e "    • Nginx Config : ${nginx_path}  $([ "${nginx_status}" = "Ready" ] && echo -e "(${GREEN}✓ Ada${NC})" || echo -e "(${RED}✗ Belum ada${NC})")"
     echo -e "    • Compose File : ${compose_path}  $([ "${compose_status}" = "Ready" ] && echo -e "(${GREEN}✓ Ada${NC})" || echo -e "(${RED}✗ Belum ada${NC})")"
@@ -389,11 +445,11 @@ list_apps() {
     load_all_apps
 
     echo ""
-    echo "╔═══════════════════════════════════════════════════════════════════════════════════════╗"
-    echo "║                              📦  Application Setup Status                             ║"
-    echo "╠════════╤════════════╤════════╤════════════╤════════╤════════╤═════════╤═══════════════╣"
-    echo "║ App    │ Folder     │ Cloned │ Dockerfile │ Nginx  │ Env    │ Compose │ DB Status     ║"
-    echo "║────────┼────────────┼────────┼────────────┼────────┼────────┼─────────┼───────────────║"
+    echo "╔════════╤════════════╤═══════════════════╤════════╤════════════╤════════╤════════╤═════════╤═══════════════╗"
+    echo "║                                      📦  Application Setup Status                                         ║"
+    echo "╠════════╤════════════╤═══════════════════╤════════╤════════════╤════════╤════════╤═════════╤═══════════════╣"
+    echo "║ App    │ Folder     │ Role              │ Cloned │ Dockerfile │ Nginx  │ Env    │ Compose │ DB Status     ║"
+    echo "║────────┼────────────┼───────────────────┼────────┼────────────┼────────┼────────┼─────────┼───────────────║"
 
     for i in "${!APP_NAMES[@]}"; do
         local name="${APP_NAMES[$i]}"
@@ -405,11 +461,20 @@ list_apps() {
         
         IFS='|' read -r f_cloned f_dockerfile f_nginx f_env f_compose f_db <<< "$checks"
         
-        printf "║ %-6s │ %-10s │ %b │ %b │ %b │ %b │ %b │ %b ║\n" \
-            "$name" "$folder" "$f_cloned" "$f_dockerfile" "$f_nginx" "$f_env" "$f_compose" "$f_db"
+        local role="${APP_ROLES[$i]}"
+        local pair="${APP_PAIRS[$i]}"
+        local role_display="Standalone"
+        if [ "$role" = "backend" ] && [ -n "$pair" ]; then
+            role_display="BE (→${pair})"
+        elif [ "$role" = "frontend" ] && [ -n "$pair" ]; then
+            role_display="FE (of ${pair})"
+        fi
+        
+        printf "║ %-6s │ %-10s │ %-17s │ %b │ %b │ %b │ %b │ %b │ %b ║\n" \
+            "$name" "$folder" "$role_display" "$f_cloned" "$f_dockerfile" "$f_nginx" "$f_env" "$f_compose" "$f_db"
     done
 
-    echo "╚════════╧════════════╧════════╧════════════╧════════╧════════╧═════════╧═══════════════╝"
+    echo "╚════════╧════════════╧═══════════════════╧════════╧════════════╧════════╧════════╧═════════╧═══════════════╝"
     echo ""
     echo "── Cara Pakai ─────────────────────────────────────────────────────"
     echo "  ./prepare.sh                    — tampilkan status/daftar ini"
@@ -486,14 +551,39 @@ ensure_app_infrastructure() {
     local source_dir="$APP_DIR"
     local desc="${APP_DESC:-${name}}"
 
-    # ── Cek file-file dasar ──
+    local role="${APP_ROLES[0]}" # Wait, we need to check if it's frontend
+    # To properly check if it's frontend, we can check APP_ROLES array for current APP_NAME, or just check APP_PAIRS
+    # But it's easier to use _has_frontend or similar. Actually, in prepare.sh load_all_apps populates APP_ROLES.
+    local app_role="standalone"
+    local app_pair=""
+    for i in "${!APP_NAMES[@]}"; do
+        if [ "${APP_NAMES[$i]}" = "$name" ]; then
+            app_role="${APP_ROLES[$i]}"
+            app_pair="${APP_PAIRS[$i]}"
+            break
+        fi
+    done
+
     local apps_dir="${PROJECT_DIR}/apps/${name}"
+    local env_name=".env.example"
+    local df_name="Dockerfile"
+
+    if [ "$app_role" = "frontend" ] && [ -n "$app_pair" ]; then
+        apps_dir="${PROJECT_DIR}/apps/${app_pair}"
+        env_name="fe.env.example"
+        df_name="fe.Dockerfile"
+        # We don't check app.yml for frontend because it's merged in backend
+    fi
+
+    # ── Cek file-file dasar ──
     local perlu_generate=false
     local langkah_tambah=""
 
-    [ ! -f "${apps_dir}/app.yml" ]      && { langkah_tambah="${langkah_tambah}  • apps/${name}/app.yml\n";      perlu_generate=true; }
-    [ ! -f "${apps_dir}/Dockerfile" ]   && { langkah_tambah="${langkah_tambah}  • apps/${name}/Dockerfile\n";   perlu_generate=true; }
-    [ ! -f "${apps_dir}/.env.example" ] && { langkah_tambah="${langkah_tambah}  • apps/${name}/.env.example\n"; perlu_generate=true; }
+    if [ "$app_role" != "frontend" ]; then
+        [ ! -f "${apps_dir}/app.yml" ]      && { langkah_tambah="${langkah_tambah}  • apps/${name}/app.yml\n";      perlu_generate=true; }
+    fi
+    [ ! -f "${apps_dir}/${df_name}" ] && [ ! -f "${apps_dir}/be.Dockerfile" ] && { langkah_tambah="${langkah_tambah}  • apps/${name}/${df_name}\n";   perlu_generate=true; }
+    [ ! -f "${apps_dir}/${env_name}" ] && { langkah_tambah="${langkah_tambah}  • apps/${name}/${env_name}\n"; perlu_generate=true; }
     [ ! -f "${PROJECT_DIR}/compose/apps/${name}.yml" ] && { langkah_tambah="${langkah_tambah}  • compose/apps/${name}.yml\n";                perlu_generate=true; }
     [ ! -f "${PROJECT_DIR}/docker/nginx/conf.d/${name}.conf" ] && { langkah_tambah="${langkah_tambah}  • docker/nginx/conf.d/${name}.conf\n"; perlu_generate=true; }
 
@@ -524,7 +614,7 @@ ensure_app_infrastructure() {
     # ── Generate missing files via scaffold.sh (subprocess to avoid function/var conflicts) ──
     local app_yml="${PROJECT_DIR}/apps/${name}/app.yml"
     if [ ! -f "$app_yml" ]; then
-        log_info "Generating apps/${name}/app.yml from repos.csv details..."
+        log_info "Generating apps/${name}/app.yml..."
         mkdir -p "$(dirname "$app_yml")"
         
         # Check if scaffold.sh needs variables exported to render app.yml
@@ -577,10 +667,11 @@ ensure_app_infrastructure() {
 prepare_app() {
     local target="$1"
     local no_deps="${2:-false}"
+    local _from_pair="${3:-false}"
 
-    # ── Cek apakah app baru (belum di repos.csv) ─────────────────────────────
+    # ── Cek apakah app baru (belum ada app.yml) ─────────────────────────────
     if ! app_exists_in_repos "$target"; then
-        log_header "🚀 App Baru: ${target} (belum terdaftar di repos.csv)"
+        log_header "🚀 App Baru: ${target} (belum terdaftar di apps/)"
         echo ""
         echo "App '${target}' belum ada di repositori. Akan dilakukan scaffolding interaktif..."
         echo ""
@@ -594,65 +685,100 @@ prepare_app() {
         echo "└─────────────────────────────────────────────────────────────┘"
 
         if ! load_app_config "$target"; then
-            log_error "Gagal load konfigurasi '${target}' setelah scaffold. Cek repos.csv."
+            log_error "Gagal load konfigurasi '${target}' setelah scaffold. Cek app.yml."
             exit 1
         fi
     else
-        if ! load_app_config "$target"; then
-            log_error "App '${target}' tidak dikenal!"
-            echo ""
-            echo "App yang tersedia:"
-            for i in "${!APP_NAMES[@]}"; do
-                echo "  • ${APP_NAMES[$i]} — ${APP_DESCS[$i]}"
-            done
-            echo ""
-            echo "Coba: ./prepare.sh list"
-            exit 1
+        # ── Cek fullstack project ──────────────────────────────────────────────
+        local yml_file="${PROJECT_DIR}/apps/${target}/app.yml"
+        if [ ! -f "$yml_file" ]; then
+            # Maybe it's a frontend from a combined app.yml
+            # We rely on load_app_config to populate APP_ROLES
+            if ! load_app_config "$target"; then
+                log_error "App '${target}' tidak dikenal!"
+                exit 1
+            fi
+        else
+            if ! load_app_config "$target"; then
+                log_error "App '${target}' tidak dikenal!"
+                exit 1
+            fi
+        fi
+        
+        # Now use APP_ROLES which is loaded correctly for both BE and FE
+        local role="${APP_ROLES[0]}"
+        local fullstack_pair="${APP_PAIRS[0]}"
+        
+        # If we target the frontend directly but we don't allow it, redirect.
+        if [ "$role" = "frontend" ] && [ "$_from_pair" = "false" ] && [ -n "$fullstack_pair" ]; then
+            if [ "${TARGET_BE}" = "true" ]; then
+                log_warn "'${target}' adalah frontend dari project '${fullstack_pair}'"
+                log_info "Redirecting ke project utama: ${fullstack_pair}"
+                prepare_app "$fullstack_pair" "$no_deps" "false"
+                return
+            fi
         fi
     fi
 
-    # ── Info box app ──────────────────────────────────────────────────────────
-    echo ""
-    echo "  ┌─────────────────────────────────────────────────────────┐"
-    printf "  │  App    : %-47s│\n" "${APP_NAME}"
-    printf "  │  Desc   : %-47s│\n" "${APP_DESC:0:47}"
-    printf "  │  Repo   : %-47s│\n" "${REPO_URL:0:47}"
-    printf "  │  Branch : %-47s│\n" "${BRANCH}"
-    printf "  │  Target : %-47s│\n" "site/${APP_DIR}"
-    echo "  └─────────────────────────────────────────────────────────┘"
+    local skip_prepare=false
+    local role="${APP_ROLES[0]}"
+    local fullstack_pair="${APP_PAIRS[0]}"
+    if [ "$role" = "frontend" ] && [ "${TARGET_FE}" = "false" ]; then skip_prepare=true; fi
+    if [ "$role" = "backend" ] && [ "${TARGET_BE}" = "false" ]; then skip_prepare=true; fi
 
-    # ── Auto-generate infrastruktur yang kurang ────────────────────────────────
-    ensure_app_infrastructure
-
-    # ── Pilih mode interaktif ─────────────────────────────────────────────────
-    local PREPARE_MODE=""
-    if [ "${IS_ALL}" = "true" ]; then
-        PREPARE_MODE="clone"
-        echo -e "  ${CYAN}▶ Mode (Automated for ALL): Clone repo & build image${NC}"
+    if [ "$skip_prepare" = "false" ]; then
+        # ── Info box app ──────────────────────────────────────────────────────────
         echo ""
-    else
-        select_prepare_mode "${APP_NAME}" "${APP_DESC}"
+        echo "  ┌─────────────────────────────────────────────────────────┐"
+        printf "  │  App    : %-47s│\n" "${APP_NAME}"
+        printf "  │  Desc   : %-47s│\n" "${APP_DESC:0:47}"
+        printf "  │  Repo   : %-47s│\n" "${REPO_URL:0:47}"
+        printf "  │  Branch : %-47s│\n" "${BRANCH}"
+        printf "  │  Target : %-47s│\n" "sources/${APP_DIR}"
+        echo "  └─────────────────────────────────────────────────────────┘"
+
+        # ── Auto-generate infrastruktur yang kurang ────────────────────────────────
+        ensure_app_infrastructure
+
+        # ── Pilih mode interaktif ─────────────────────────────────────────────────
+        local PREPARE_MODE=""
+        if [ "${IS_ALL}" = "true" ]; then
+            PREPARE_MODE="clone"
+            echo -e "  ${CYAN}▶ Mode (Automated for ALL): Clone repo & build image${NC}"
+            echo ""
+        else
+            select_prepare_mode "${APP_NAME}" "${APP_DESC}"
+        fi
+
+        # ── Jalankan mode yang dipilih ────────────────────────────────────────────
+        case "${PREPARE_MODE}" in
+            dockerfile)
+                run_mode_dockerfile
+                ;;
+            clone)
+                run_mode_clone "${no_deps}"
+                ;;
+            image)
+                run_mode_image
+                ;;
+            *)
+                log_error "Mode tidak dikenal: ${PREPARE_MODE}"
+                exit 1
+                ;;
+        esac
+
+        echo ""
+        log_success "${APP_NAME} prepare selesai! (mode: ${PREPARE_MODE})"
     fi
 
-    # ── Jalankan mode yang dipilih ────────────────────────────────────────────
-    case "${PREPARE_MODE}" in
-        dockerfile)
-            run_mode_dockerfile
-            ;;
-        clone)
-            run_mode_clone "${no_deps}"
-            ;;
-        image)
-            run_mode_image
-            ;;
-        *)
-            log_error "Mode tidak dikenal: ${PREPARE_MODE}"
-            exit 1
-            ;;
-    esac
-
-    echo ""
-    log_success "${APP_NAME} prepare selesai! (mode: ${PREPARE_MODE})"
+    # ── Di akhir prepare BE: otomatis prepare FE juga ─────────────────────
+    if [ "$role" = "backend" ] && [ -n "$fullstack_pair" ] && [ "$_from_pair" = "false" ]; then
+        if [ "${TARGET_FE}" = "true" ]; then
+            echo ""
+            log_header "🔗 Fullstack: Lanjut prepare frontend ${fullstack_pair}"
+            prepare_app "$fullstack_pair" "$no_deps" "true"
+        fi
+    fi
 }
 
 # ============================================
@@ -679,6 +805,8 @@ main() {
     # Parse args: collect apps and flags
     local apps=()
     local no_deps=false
+    TARGET_BE=true
+    TARGET_FE=true
 
     for arg in "$@"; do
         case "$arg" in
@@ -687,6 +815,12 @@ main() {
                 ;;
             --skip)
                 SKIP_EXISTING="true"
+                ;;
+            --be)
+                TARGET_FE=false
+                ;;
+            --fe)
+                TARGET_BE=false
                 ;;
             -h|--help)
                 list_apps

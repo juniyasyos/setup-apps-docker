@@ -20,7 +20,7 @@ rsch-apps/
 │
 ├── compose.yml                      # Main Compose aggregator manifest
 ├── rsch                             # Platform Orchestration CLI entrypoint
-├── repos.csv                        # Global repository configuration registry
+├── apps/                            # Application metadata and registry (app.yml per app)
 ├── .env.example                     # Reference template for top-level platform env variables
 ├── .app-modes                       # Internal registry for chosen app prepare modes (Gitignored)
 │

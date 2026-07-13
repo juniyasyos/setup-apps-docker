@@ -1,5 +1,6 @@
 # IKP — Incident Reporting & Pelaporan
 name: ikp
+role: standalone
 repo: https://github.com/juniyasyos/ikp.git
 branch: main
 source_dir: ikp

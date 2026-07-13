@@ -1,5 +1,6 @@
 # IAM Server — Authentication & SSO
 name: iam
+role: standalone
 repo: https://github.com/juniyasyos/auth-server.git
 branch: main
 source_dir: iam-server

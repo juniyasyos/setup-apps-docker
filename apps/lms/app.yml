@@ -1,5 +1,6 @@
 # LMS — Learning Management System
 name: lms
+role: standalone
 repo: https://github.com/juniyasyos/lms.git
 branch: main
 source_dir: lms-app

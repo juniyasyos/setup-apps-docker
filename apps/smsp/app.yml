@@ -1,8 +1,10 @@
 #  Smartpresence Deskripsi 
 name: smsp
+role: backend
+has_frontend: true
 repo: https://github.com/Iannn-vbeta/be-laravel-smartpresence
 branch:  main
-source_dir: smsp
+source_dir: smsp/be
 image: smsp
 version: v1.0.0
 port: 7200
@@ -16,3 +18,26 @@ php_version: "8.4"
 has_prod_env: no
 has_local_deps: no
 description:  Smartpresence Deskripsi 
+
+fe_name: fe-smsp
+fe_type: frontend-static
+fe_framework: react-vite
+fe_repo: https://github.com/Iannn-vbeta/fe-react-smartpresence.git
+fe_branch: main
+fe_image: fe-smsp
+fe_version: v1.0.0
+fe_has_prod_env: false
+fe_has_local_deps: false
+fe_description: FE-SMSP - Smartpresence Frontend React App
+fe_source_dir: smsp/fe
+fe_dockerfile: apps/smsp/fe.Dockerfile
+fe_port: 7250
+fe_nginx:
+  enabled: true
+  listen_port: 7250
+  upstream_service: fe-smsp
+  upstream_port: 7250
+fe_env:
+  NODE_ENV: production
+  VITE_APP_NAME: "SMSP"
+  VITE_API_URL: "http://localhost:7200"

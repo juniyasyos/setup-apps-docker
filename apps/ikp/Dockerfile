@@ -98,7 +98,7 @@ WORKDIR /build
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-COPY site/${APP_DIR}/composer.json site/${APP_DIR}/composer.lock* ./
+COPY sources/${APP_DIR}/composer.json sources/${APP_DIR}/composer.lock* ./
 RUN set -eux; \
     if [ -f composer.json ]; then \
       composer install \
@@ -112,7 +112,7 @@ RUN set -eux; \
     fi; \
     rm -rf "$COMPOSER_CACHE_DIR" /root/.composer /tmp/*
 
-COPY site/${APP_DIR}/ .
+COPY sources/${APP_DIR}/ .
 
 # Clean unnecessary files from final app payload
 RUN set -eux; \

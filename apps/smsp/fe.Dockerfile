@@ -35,7 +35,7 @@ RUN npm config set fetch-retries 5 && \
 
 COPY . .
 
-RUN npm run build
+RUN rm -f .env .env.local .env.production && npm run build
 
 
 # ─────────────────────────────────────────

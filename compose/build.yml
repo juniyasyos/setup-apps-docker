@@ -144,7 +144,7 @@ services:
   smsp:
     build:
       context: ..
-      dockerfile: apps/smsp/Dockerfile
+      dockerfile: apps/smsp/be.Dockerfile
       args:
         UID: "1000"
         GID: "1000"
@@ -152,7 +152,7 @@ services:
 
         APP_NAME: "Smartpresence Deskripsi"
         APP_ENV: "production"
-        APP_DIR: "smsp"
+        APP_DIR: "smsp/be"
 
         DB_HOST: "database-service"
         DB_USERNAME: "smsp_user"
@@ -173,11 +173,13 @@ services:
   fe-smsp:
     image: ${FE_SMSP_IMAGE:-fe-smsp:v1.0.0}
     build:
-      context: ../site/fe-smsp
-      dockerfile: ../../apps/fe-smsp/Dockerfile
+      context: ../sources/smsp/fe
+      dockerfile: ../../../apps/smsp/fe.Dockerfile
       additional_contexts:
         nginx_infra: ../docker/nginx
       args:
         APP_NAME: fe-smsp
         VITE_APP_NAME: SMSP
         VITE_API_URL: VITE_API_URL_PLACEHOLDER
+        VITE_USE_SSO: "true"
+        VITE_SSO_URL: "/sso/login"
