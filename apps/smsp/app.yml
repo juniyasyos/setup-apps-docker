@@ -2,7 +2,7 @@
 name: smsp
 role: backend
 has_frontend: true
-repo: https://github.com/Iannn-vbeta/be-laravel-smartpresence
+repo: https://github.com/juniyasyos/be-laravel-smartpresence
 branch:  main
 source_dir: smsp/be
 image: smsp
@@ -22,7 +22,7 @@ description:  Smartpresence Deskripsi
 fe_name: fe-smsp
 fe_type: frontend-static
 fe_framework: react-vite
-fe_repo: https://github.com/Iannn-vbeta/fe-react-smartpresence.git
+fe_repo: https://github.com/juniyasyos/fe-react-smartpresence.git
 fe_branch: main
 fe_image: fe-smsp
 fe_version: v1.0.0
