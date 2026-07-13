@@ -181,5 +181,5 @@ services:
         APP_NAME: fe-smsp
         VITE_APP_NAME: SMSP
         VITE_API_URL: VITE_API_URL_PLACEHOLDER
-        VITE_USE_SSO: "true"
-        VITE_SSO_URL: "/sso/login"
+        VITE_USE_SSO: VITE_USE_SSO_PLACEHOLDER
+        VITE_SSO_URL: VITE_SSO_URL_PLACEHOLDER
