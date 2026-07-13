@@ -6,7 +6,7 @@ repo: https://github.com/juniyasyos/be-laravel-smartpresence
 branch:  main
 source_dir: smsp/be
 image: smsp
-version: v1.0.0
+version: v1.0.1
 port: 7200
 domain: smsp.local
 database: smsp_db
@@ -25,7 +25,7 @@ fe_framework: react-vite
 fe_repo: https://github.com/juniyasyos/fe-react-smartpresence.git
 fe_branch: main
 fe_image: fe-smsp
-fe_version: v1.0.0
+fe_version: v1.0.1
 fe_has_prod_env: false
 fe_has_local_deps: false
 fe_description: FE-SMSP - Smartpresence Frontend React App
