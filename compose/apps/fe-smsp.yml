@@ -7,6 +7,10 @@ services:
     env_file:
       - ../../apps/smsp/fe.env.example
 
+    environment:
+      VITE_API_URL: "http://${HOST_IP:-localhost}:${SMSP_HOST_PORT:-7200}"
+      VITE_SSO_URL: "http://${HOST_IP:-localhost}:${SMSP_HOST_PORT:-7200}/sso/login"
+
     expose:
       - "80"
 
