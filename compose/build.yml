@@ -171,7 +171,7 @@ services:
 
   # Frontend Compose
   fe-smsp:
-    image: ${FE_SMSP_IMAGE:-fe-smsp:v1.0.0}
+    image: ${FE_SMSP_IMAGE:-fe-smsp:v1.0.1}
     build:
       context: ../sources/smsp/fe
       dockerfile: ../../../apps/smsp/fe.Dockerfile

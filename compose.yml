@@ -94,7 +94,7 @@ services:
 
 ####################################################################################################
   # Smartpresence Deskripsi
-  # Image: smsp:v1.0.0
+  # Image: smsp:v1.0.1
   app-smsp:
     extends:
       file: compose/apps/smsp.yml

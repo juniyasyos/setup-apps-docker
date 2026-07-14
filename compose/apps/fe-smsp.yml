@@ -1,6 +1,6 @@
 services:
   fe-smsp:
-    image: ${FE_SMSP_IMAGE:-fe-smsp:v1.0.0}
+    image: ${FE_SMSP_IMAGE:-fe-smsp:v1.0.1}
     container_name: fe-smsp
     restart: unless-stopped
 

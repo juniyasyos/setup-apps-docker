@@ -6,7 +6,7 @@ services:
     extends:
       file: ../base/php-base.yml
       service: php-app-base
-    image: smsp:v1.0.0
+    image: smsp:v1.0.1
     container_name: smsp-app
     working_dir: /var/www/smsp
     env_file:
@@ -68,7 +68,7 @@ services:
     extends:
       file: ../base/php-base.yml
       service: php-worker-base
-    image: smsp:v1.0.0
+    image: smsp:v1.0.1
     container_name: smsp-queue
     working_dir: /var/www/smsp
     env_file:
@@ -101,7 +101,7 @@ services:
     extends:
       file: ../base/php-base.yml
       service: php-scheduler-base
-    image: smsp:v1.0.0
+    image: smsp:v1.0.1
     container_name: smsp-scheduler
     working_dir: /var/www/smsp
     env_file:
