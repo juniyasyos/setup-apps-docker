@@ -40,4 +40,4 @@ fe_nginx:
 fe_env:
   NODE_ENV: production
   VITE_APP_NAME: "SMSP"
-  VITE_API_URL: "http://localhost:7200"
+  VITE_API_URL: "http://${HOST_IP:-localhost}:${SMSP_HOST_PORT:-7200}"
