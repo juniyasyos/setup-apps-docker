@@ -51,10 +51,12 @@ LABEL app.framework="react-vite"
 
 COPY --from=nginx_infra frontend-spa.conf /etc/nginx/conf.d/default.conf
 
-COPY --from=builder /app/dist /usr/share/nginx/html
+COPY --from=builder /app/dist /usr/share/nginx/html_template
+RUN cp -r /usr/share/nginx/html_template/* /usr/share/nginx/html/
 
 # Inject environment variables at runtime
 RUN echo '#!/bin/sh' > /docker-entrypoint.d/40-inject-env.sh && \
+    echo 'cp -rf /usr/share/nginx/html_template/* /usr/share/nginx/html/' >> /docker-entrypoint.d/40-inject-env.sh && \
     echo 'find /usr/share/nginx/html -type f \( -name "*.js" -o -name "*.html" \) -exec sed -i "s|VITE_APP_NAME_PLACEHOLDER|${VITE_APP_NAME}|g" {} \;' >> /docker-entrypoint.d/40-inject-env.sh && \
     echo 'find /usr/share/nginx/html -type f \( -name "*.js" -o -name "*.html" \) -exec sed -i "s|VITE_API_URL_PLACEHOLDER|${VITE_API_URL}|g" {} \;' >> /docker-entrypoint.d/40-inject-env.sh && \
     echo 'find /usr/share/nginx/html -type f \( -name "*.js" -o -name "*.html" \) -exec sed -i "s|VITE_USE_SSO_PLACEHOLDER|${VITE_USE_SSO}|g" {} \;' >> /docker-entrypoint.d/40-inject-env.sh && \
