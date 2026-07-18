@@ -6,7 +6,7 @@ services:
     restart: unless-stopped
 
     ports:
-      - "${PMA_PORT:-8888}:80"
+      - "8880:80"
     environment:
       PMA_HOST: db
       PMA_PORT: 3306
