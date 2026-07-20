@@ -83,6 +83,7 @@ services:
       AWS_BUCKET: siimut
       AWS_URL: http://192.168.1.4:9090/siimut
       AWS_ENDPOINT: http://minio:9090
+      LOG_LEVEL: warning
       # SSO Configuration - Override from compose
       USE_SSO: "true"
       IAM_ENABLED: "true"
