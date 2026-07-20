@@ -39,6 +39,9 @@ services:
       IAM_LOGIN_ROUTE: "/siimut/login"
       IAM_CALLBACK_ROUTE: "/sso/callback"
       IAM_APP_KEY: "siimut"
+      IAM_BACKCHANNEL_METHOD: "jwt"
+      IAM_ROLE_SYNC_MODE: "push"
+      IAM_USER_SYNC_MODE: "push"
     volumes:
       - siimut_storage:/var/www/siimut/storage
       - siimut_bootstrap_cache:/var/www/siimut/bootstrap/cache
