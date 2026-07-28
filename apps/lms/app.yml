@@ -1,7 +1,7 @@
 # LMS — Learning Management System
 name: lms
 role: standalone
-repo: https://github.com/juniyasyos/lms.git
+repo: https://github.com/RSCH-Platform/LMS.git
 branch: main
 source_dir: lms-app
 image: juniyasyos/lms
