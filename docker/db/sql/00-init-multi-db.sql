@@ -119,4 +119,25 @@ ALTER USER 'smsp_user_readonly'@'%' IDENTIFIED BY 'smsp@ReadOnly2025!';
 GRANT SELECT
   ON smsp_db.* TO 'smsp_user_readonly'@'%';
 
+
+-- =================================================
+-- template1_db Database
+-- App: template-1
+-- =================================================
+CREATE DATABASE IF NOT EXISTS template1_db
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+
+CREATE USER IF NOT EXISTS 'template1_user'@'%'
+  IDENTIFIED BY 'template1_password';
+
+GRANT ALL PRIVILEGES
+  ON template1_db.* TO 'template1_user'@'%';
+
+CREATE USER IF NOT EXISTS 'template1_user_readonly'@'%'
+  IDENTIFIED BY 'template-1@ReadOnly2025!';
+
+GRANT SELECT
+  ON template1_db.* TO 'template1_user_readonly'@'%';
+
 FLUSH PRIVILEGES;

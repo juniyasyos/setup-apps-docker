@@ -183,3 +183,34 @@ services:
         VITE_API_URL: VITE_API_URL_PLACEHOLDER
         VITE_USE_SSO: VITE_USE_SSO_PLACEHOLDER
         VITE_SSO_URL: VITE_SSO_URL_PLACEHOLDER
+
+  ####################################################################################################
+  # template-1 - Laravel Application
+  ####################################################################################################
+  template-1:
+    build:
+      context: ..
+      dockerfile: apps/template-1/Dockerfile
+      args:
+        UID: "1000"
+        GID: "1000"
+        TZ: "Asia/Jakarta"
+
+        APP_NAME: "template-1 - Laravel Application"
+        APP_ENV: "production"
+        APP_DIR: "template-1"
+
+        DB_HOST: "database-service"
+        DB_USERNAME: "template1_user"
+        DB_PASSWORD: "template1_password"
+        DB_DATABASE: "template1_db"
+
+        AWS_ACCESS_KEY_ID: "admin"
+        AWS_SECRET_ACCESS_KEY: "password"
+        AWS_BUCKET: "template-1"
+        AWS_URL: "http://minio:9090/template-1"
+        AWS_ENDPOINT: "http://minio:9090"
+
+        BUILD_TIMESTAMP: "${BUILD_TIMESTAMP:-manual}"
+    image: juniyasyos/template-1:${TEMPLATE_1_VERSION:-v1.0.0}
+    pull_policy: never

@@ -1,0 +1,18 @@
+# template-1 - Laravel Application
+name: template-1
+repo: https://github.com/juniyasyos/template-1.git
+branch: main
+source_dir: template-1
+image: juniyasyos/template-1
+version: v1.0.0
+port: 8400
+domain: template-1.local
+database: template1_db
+db_user: template1_user
+db_password: template1_password
+queue: true
+scheduler: true
+php_version: "8.4"
+has_prod_env: true
+has_local_deps: false
+description: template-1 - Laravel Application

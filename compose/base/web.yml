@@ -14,6 +14,7 @@ x-apps: &apps
   smsp:   { port: 7200 }
   fe_smsp:   { port: 7250 }
   rbv:    { port: 7300 }
+  template-1: { port: 8400 }
 
 x-web-ports: &web-ports
   - "${WEB_PORTAL_PORT:-1000}:1000"
@@ -24,8 +25,11 @@ x-web-ports: &web-ports
   - "${SMSP_HOST_PORT:-7200}:7200"
   - "${FE_SMSP_HOST_PORT:-7250}:7250"
   - "${RBV_HOST_PORT:-7300}:7300"
+  - "${TEMPLATE_1_HOST_PORT:-8400}:8400"
 
 x-web-volumes: &web-volumes
+  - template-1_public:/var/www/template-1/public:ro
+  - template-1_storage:/var/www/template-1/storage:ro
   - smsp_public:/var/www/./public:ro
   - smsp_storage:/var/www/./storage:ro
   - ../../docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
@@ -96,4 +100,8 @@ volumes:
   rbv_public:
     driver: local
   rbv_storage:
+    driver: local
+  template-1_public:
+    driver: local
+  template-1_storage:
     driver: local

@@ -490,6 +490,9 @@ EOF
 # -----------------------------------------------------------------------------
 create_app_yml_interactive() {
   local app_name="$1"
+  cmd_new "$app_name"
+}
+
 cmd_new() {
   local name="$1"
 

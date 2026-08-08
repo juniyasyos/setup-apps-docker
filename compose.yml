@@ -114,6 +114,22 @@ services:
     extends:
       file: compose/apps/smsp.yml
       service: scheduler
+  # template-1 - Laravel Application
+  # Image: juniyasyos/template-1:v1.0.0
+  app-template-1:
+    extends:
+      file: compose/apps/template-1.yml
+      service: app
+
+  queue-template-1:
+    extends:
+      file: compose/apps/template-1.yml
+      service: queue
+
+  scheduler-template-1:
+    extends:
+      file: compose/apps/template-1.yml
+      service: scheduler
 # Named Volumes
 # Volume naming convention:
 #   {app}_{type}  →  e.g. siimut_storage, ikp_public
@@ -160,12 +176,20 @@ volumes:
   rbv_bootstrap_cache:
     driver: local
 
-  # ── RBV ──────────────────────────────────────────
+  # ── SMSP ─────────────────────────────────────────
   smsp_public:
     driver: local
   smsp_storage:
     driver: local
   smsp_bootstrap_cache:
+    driver: local
+
+  # ── TEMPLATE-1 ───────────────────────────────────
+  template-1_public:
+    driver: local
+  template-1_storage:
+    driver: local
+  template-1_bootstrap_cache:
     driver: local
 
 ####################################################################################################

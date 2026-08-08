@@ -1,5 +1,5 @@
 # ============================================
-# Production {{APP_NAME}} Image for Docker Hub
+# Production template-1 Image for Docker Hub
 # Optimized: Build once, use 3x (app/queue/scheduler)
 # ============================================
 FROM php:8.4-fpm-alpine AS base
@@ -7,7 +7,7 @@ FROM php:8.4-fpm-alpine AS base
 ARG UID=1000
 ARG GID=1000
 ARG TZ=Asia/Jakarta
-ARG APP_NAME="{{DESCRIPTION}}"
+ARG APP_NAME="template-1 - Laravel Application"
 
 # Install system dependencies and PHP extensions
 RUN apk add --no-cache \
@@ -59,7 +59,7 @@ ENV APP_NAME=${APP_NAME}
 # ============================================
 FROM base AS builder
 
-ARG APP_DIR={{APP_DIR}}
+ARG APP_DIR=template-1
 
 ENV COMPOSER_CACHE_DIR=/tmp/composer-cache \
     COMPOSER_MEMORY_LIMIT=-1 \
@@ -105,10 +105,10 @@ RUN set -eux; \
 FROM base AS runtime
 
 ARG TZ=Asia/Jakarta
-ARG APP_NAME="{{DESCRIPTION}}"
+ARG APP_NAME="template-1 - Laravel Application"
 
 ENV APP_ENV=production \
-    APP_WORKDIR=/var/www/{{APP_DIR}} \
+    APP_WORKDIR=/var/www/template-1 \
     PHP_OPCACHE_VALIDATE_TIMESTAMPS=0 \
     PHP_MEMORY_LIMIT=512M \
     APP_NAME=${APP_NAME}
