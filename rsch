@@ -117,6 +117,10 @@ COMMANDS:
     storage stop        Stop Database and Minio
     storage restart     Restart Database and Minio
 
+  Database:
+    db init             Run SQL init scripts on the running DB container (safe, no data loss)
+    db shell            Open a MySQL root shell inside the DB container
+
   Debug & Health:
     logs <app>          Show logs for a specific app
     health <app>        Run health check scripts
@@ -561,6 +565,50 @@ cmd_health() {
 }
 
 # ──────────────────────────────────────────────
+# Database
+# ──────────────────────────────────────────────
+cmd_db() {
+    local action="${1:-}"
+    local db_container="database-service"
+    local root_pass="rootpass123"
+    local sql_file="${SCRIPT_DIR}/docker/db/sql/00-init-multi-db.sql"
+
+    case "$action" in
+        init)
+            if ! docker ps --format '{{.Names}}' | grep -q "^${db_container}$"; then
+                log_error "Container '${db_container}' is not running."
+                log_info "Start it first with: ./rsch infra up"
+                exit 1
+            fi
+            if [ ! -f "$sql_file" ]; then
+                log_error "SQL file not found: ${sql_file}"
+                exit 1
+            fi
+            log_info "Running DB init script on container '${db_container}'..."
+            docker exec -i "${db_container}" \
+                mysql -u root -p"${root_pass}" < "${sql_file}"
+            log_success "DB init completed. Databases and users are ready."
+            ;;
+        shell)
+            if ! docker ps --format '{{.Names}}' | grep -q "^${db_container}$"; then
+                log_error "Container '${db_container}' is not running."
+                log_info "Start it first with: ./rsch infra up"
+                exit 1
+            fi
+            log_info "Opening MySQL shell on '${db_container}' as root..."
+            docker exec -it "${db_container}" mysql -u root -p"${root_pass}"
+            ;;
+        *)
+            log_error "Usage: ./rsch db <init|shell>"
+            echo ""
+            echo "  init   Run SQL init scripts on the running DB container (safe, no data loss)"
+            echo "  shell  Open a MySQL root shell inside the DB container"
+            exit 1
+            ;;
+    esac
+}
+
+# ──────────────────────────────────────────────
 # Infrastructure
 # ──────────────────────────────────────────────
 cmd_infra() {
@@ -725,6 +773,7 @@ case "$COMMAND" in
     health)     cmd_health "$@" ;;
     infra)      cmd_infra "$@" ;;
     storage)    cmd_storage "$@" ;;
+    db)         cmd_db "$@" ;;
     list)       cmd_list ;;
     detail)     cmd_detail "$@" ;;
     help|-h|--help) show_help ;;
