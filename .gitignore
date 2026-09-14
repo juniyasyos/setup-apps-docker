@@ -20,6 +20,7 @@ storage/logs/*
 
 # Ignore Repos directory and contents
 Repos/
+sources/
 
 # Sertificate 
 *.crt
