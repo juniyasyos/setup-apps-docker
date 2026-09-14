@@ -20,7 +20,7 @@ services:
       - ":9001"
 
     volumes:
-      - minio_data:/data
+      - storage_data:/data
 
     ports:
       # Host:Container
@@ -163,8 +163,8 @@ services:
       - storage-network
 
 volumes:
-  minio_data:
-    name: "${MINIO_VOLUME_NAME:-minio_data}"
+  storage_data:
+    name: "${MINIO_VOLUME_NAME:-storage_data}"
 
 networks:
   storage-network:
