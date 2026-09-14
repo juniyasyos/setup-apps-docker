@@ -569,7 +569,10 @@ cmd_health() {
 # ──────────────────────────────────────────────
 cmd_db() {
     local action="${1:-}"
-    local db_container="database-service"
+    local db_container="database-core"
+    if ! docker ps --format '{{.Names}}' | grep -q "^database-core$" && docker ps --format '{{.Names}}' | grep -q "^database-service$"; then
+        db_container="database-service"
+    fi
     local root_pass="rootpass123"
     local sql_file="${SCRIPT_DIR}/docker/db/sql/00-init-multi-db.sql"
 

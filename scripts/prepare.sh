@@ -231,17 +231,18 @@ get_app_status() {
     [ -z "$db_name" ] && db_name="${name}_db" # fallback
 
     if [ "$has_docker" = true ]; then
-        if docker ps --filter "name=database-service" --filter "status=running" --format "{{.Names}}" | grep -q "database-service"; then
+        local db_container; db_container=$(docker ps --format "{{.Names}}" | grep -E "^database-(core|service)$" | head -n 1 || echo "database-core")
+        if docker ps --filter "name=${db_container}" --filter "status=running" --format "{{.Names}}" | grep -q "${db_container}"; then
             # database is running, check if database exists inside MySQL
-            if docker exec database-service mysql -uroot -prootpass123 -e "SHOW DATABASES LIKE '${db_name}';" --silent 2>/dev/null | grep -q "${db_name}"; then
+            if docker exec "$db_container" mysql -uroot -prootpass123 -e "SHOW DATABASES LIKE '${db_name}';" --silent 2>/dev/null | grep -q "${db_name}"; then
                 c_db="Ready"
             else
                 # Database is missing but service is running. Execute the init script directly to create it on-the-fly
                 local init_sql="${PROJECT_DIR}/docker/db/sql/00-init-multi-db.sql"
                 if [ -f "$init_sql" ]; then
-                    docker exec -i database-service mysql -uroot -prootpass123 < "$init_sql" &>/dev/null || true
+                    docker exec -i "$db_container" mysql -uroot -prootpass123 < "$init_sql" &>/dev/null || true
                     # Recheck database
-                    if docker exec database-service mysql -uroot -prootpass123 -e "SHOW DATABASES LIKE '${db_name}';" --silent 2>/dev/null | grep -q "${db_name}"; then
+                    if docker exec "$db_container" mysql -uroot -prootpass123 -e "SHOW DATABASES LIKE '${db_name}';" --silent 2>/dev/null | grep -q "${db_name}"; then
                         c_db="Ready"
                     else
                         c_db="Miss "

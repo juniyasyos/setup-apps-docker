@@ -3,7 +3,7 @@
 services:
   db:
     image: mysql:8.0
-    container_name: database-service
+    container_name: database-core
     restart: unless-stopped
     volumes:
       - db_data:/var/lib/mysql
