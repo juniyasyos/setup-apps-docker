@@ -55,7 +55,7 @@ services:
 
   minio-init:
     image: minio/mc:latest
-    container_name: minio-init
+    container_name: minio-core-init
     restart: "no"
 
     depends_on:
