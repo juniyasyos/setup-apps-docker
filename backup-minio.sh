@@ -97,17 +97,25 @@ log_info "Menjalankan MinIO Client (mc) untuk menyalin semua file..."
 
 # Jalankan container ephemeral minio/mc pada network yang sama
 docker run --rm \
+    --entrypoint /bin/sh \
     --network "$MINIO_NETWORK" \
     -v "${OUTPUT_DIR}/buckets":/export \
     -v "${OUTPUT_DIR}/metadata":/metadata \
-    minio/mc:latest sh -c "
+    minio/mc:latest -c "
         set -e
         echo '🔗 Menghubungkan mc ke MinIO...'
         mc alias set myminio http://${MINIO_CONTAINER}:${INTERNAL_PORT} '${MINIO_USER}' '${MINIO_PASSWORD}' --api S3v4 >/dev/null 2>&1
 
         echo '📋 Mendapatkan daftar seluruh bucket...'
         mc ls myminio > /metadata/raw_buckets.txt
-        awk '{print \$NF}' /metadata/raw_buckets.txt | tr -d '/' > /metadata/buckets_list.txt
+        > /metadata/buckets_list.txt
+        while IFS= read -r line; do
+            [ -z \"\$line\" ] && continue
+            b_name=\"\${line##* }\"
+            b_name=\"\${b_name%/}\"
+            [ -z \"\$b_name\" ] && continue
+            echo \"\$b_name\" >> /metadata/buckets_list.txt
+        done < /metadata/raw_buckets.txt
 
         echo ''
         echo 'Memulai proses sinkronisasi (mirror)...'
