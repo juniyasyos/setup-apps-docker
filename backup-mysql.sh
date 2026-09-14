@@ -58,48 +58,13 @@ if [ -z "$DB_CONTAINER" ]; then
 fi
 log_success "Kontainer MySQL terdeteksi: ${BOLD}${DB_CONTAINER}${NC}"
 
-# 2. Deteksi & Verifikasi Kredensial Root (Mendukung Tanpa Password / Dengan Password)
-ROOT_PASSWORD=""
-if [ -f "${SCRIPT_DIR}/env/.env.db" ]; then
-    ROOT_PASSWORD=$(grep -E '^MYSQL_ROOT_PASSWORD=' "${SCRIPT_DIR}/env/.env.db" | cut -d'=' -f2- | tr -d '\r"' || echo "")
-fi
-
-if [ -z "$ROOT_PASSWORD" ] && [ -f "${SCRIPT_DIR}/env/common.env" ]; then
-    ROOT_PASSWORD=$(grep -E '^MYSQL_ROOT_PASSWORD=' "${SCRIPT_DIR}/env/common.env" | cut -d'=' -f2- | tr -d '\r"' || echo "")
-fi
-
-if [ -z "$ROOT_PASSWORD" ] && [ -f "${SCRIPT_DIR}/.env" ]; then
-    ROOT_PASSWORD=$(grep -E '^MYSQL_ROOT_PASSWORD=' "${SCRIPT_DIR}/.env" | cut -d'=' -f2- | tr -d '\r"' || echo "")
-fi
-
-AUTH_ARGS=()
-AUTH_VERIFIED=false
-
-# 3. Uji Koneksi ke MySQL (Prioritas: Tanpa Password -> Terkonfigurasi -> Kandidat Password)
-if docker exec "$DB_CONTAINER" mysql -u root -e "SELECT 1;" >/dev/null 2>&1; then
-    AUTH_ARGS=()
-    AUTH_VERIFIED=true
-    log_success "Koneksi ke MySQL database berhasil (root tanpa password)."
-elif [ -n "$ROOT_PASSWORD" ] && docker exec "$DB_CONTAINER" mysql -u root -p"${ROOT_PASSWORD}" -e "SELECT 1;" >/dev/null 2>&1; then
-    AUTH_ARGS=(-p"${ROOT_PASSWORD}")
-    AUTH_VERIFIED=true
-    log_success "Koneksi ke MySQL database berhasil (menggunakan password terkonfigurasi)."
-else
-    for candidate_pass in "rootpass123" "secret" "secret123"; do
-        if docker exec "$DB_CONTAINER" mysql -u root -p"${candidate_pass}" -e "SELECT 1;" >/dev/null 2>&1; then
-            AUTH_ARGS=(-p"${candidate_pass}")
-            AUTH_VERIFIED=true
-            log_success "Koneksi ke MySQL database berhasil (menggunakan kandidat password: ${candidate_pass})."
-            break
-        fi
-    done
-fi
-
-if [ "$AUTH_VERIFIED" != true ]; then
-    log_error "Gagal login ke MySQL dengan user root pada kontainer ${DB_CONTAINER}!"
-    log_warn "Pastikan MySQL berjalan dan kredensial root valid (tanpa password atau sesuai konfigurasi .env)."
+# 2. Uji Koneksi ke MySQL (Root Tanpa Password)
+if ! docker exec "$DB_CONTAINER" mysql -u root -e "SELECT 1;" >/dev/null 2>&1; then
+    log_error "Gagal login ke MySQL dengan user root tanpa password pada kontainer ${DB_CONTAINER}!"
+    log_warn "Pastikan kontainer database aktif dan user root diizinkan masuk tanpa password."
     exit 1
 fi
+log_success "Koneksi ke MySQL database berhasil (root tanpa password)."
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TAHAP 2: Audit & Inventarisasi Database
@@ -113,7 +78,7 @@ mkdir -p "${OUTPUT_DIR}/metadata"
 EXCLUDED_DB="'information_schema', 'mysql', 'performance_schema', 'sys'"
 QUERY_GET_DBS="SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN (${EXCLUDED_DB}) ORDER BY schema_name;"
 
-DATABASES=$(docker exec -i "$DB_CONTAINER" mysql -u root ${AUTH_ARGS[@]+"${AUTH_ARGS[@]}"} -s -N -e "${QUERY_GET_DBS}")
+DATABASES=$(docker exec -i "$DB_CONTAINER" mysql -u root -s -N -e "${QUERY_GET_DBS}")
 
 if [ -z "$DATABASES" ]; then
     log_warn "Tidak ditemukan database aplikasi tambahan (hanya sistem MySQL default)!"
@@ -137,7 +102,7 @@ FROM information_schema.tables
 WHERE table_schema NOT IN (${EXCLUDED_DB})
 GROUP BY table_schema;
 "
-docker exec -i "$DB_CONTAINER" mysql -u root ${AUTH_ARGS[@]+"${AUTH_ARGS[@]}"} -t -e "${QUERY_AUDIT}" > "${OUTPUT_DIR}/metadata/baseline_table_summary.txt"
+docker exec -i "$DB_CONTAINER" mysql -u root -t -e "${QUERY_AUDIT}" > "${OUTPUT_DIR}/metadata/baseline_table_summary.txt"
 cat "${OUTPUT_DIR}/metadata/baseline_table_summary.txt"
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -148,7 +113,7 @@ log_step "TAHAP 3: Membuat Full Dump Monolitik (All Databases)"
 FULL_DUMP_FILE="${OUTPUT_DIR}/all_databases_${TIMESTAMP}.sql"
 log_info "Mengekspor seluruh database ke: ${FULL_DUMP_FILE} ..."
 
-docker exec -i "$DB_CONTAINER" mysqldump -u root ${AUTH_ARGS[@]+"${AUTH_ARGS[@]}"} \
+docker exec -i "$DB_CONTAINER" mysqldump -u root \
     --all-databases \
     --single-transaction \
     --quick \
@@ -177,7 +142,7 @@ for db in $DATABASES; do
     log_info "Mengekspor database: ${BOLD}${db}${NC}..."
     DB_FILE="${OUTPUT_DIR}/individual/${db}.sql"
     
-    docker exec -i "$DB_CONTAINER" mysqldump -u root ${AUTH_ARGS[@]+"${AUTH_ARGS[@]}"} \
+    docker exec -i "$DB_CONTAINER" mysqldump -u root \
         --databases "$db" \
         --single-transaction \
         --quick \
