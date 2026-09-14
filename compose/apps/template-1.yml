@@ -19,7 +19,7 @@ services:
       APP_URL: "http://${HOST_IP:-localhost}:8400"
       TRUSTED_PROXIES: "*"
 
-      DB_HOST: database-service
+      DB_HOST: database-core
       DB_USERNAME: template1_user
       DB_PASSWORD: template1_password
       DB_DATABASE: template1_db
@@ -31,7 +31,7 @@ services:
       AWS_SECRET_ACCESS_KEY: password
       AWS_BUCKET: template-1
       AWS_URL: http://${HOST_IP:-localhost}:9090/template-1
-      AWS_ENDPOINT: http://minio:9090
+      AWS_ENDPOINT: http://minio:9000
     volumes:
       - template-1_storage:/var/www/template-1/storage
       - template-1_bootstrap_cache:/var/www/template-1/bootstrap/cache
@@ -55,7 +55,7 @@ services:
     env_file:
       - ../../apps/template-1/.env.example
     environment:
-      DB_HOST: database-service
+      DB_HOST: database-core
       DB_USERNAME: template1_user
       DB_PASSWORD: template1_password
       DB_DATABASE: template1_db
@@ -88,7 +88,7 @@ services:
     env_file:
       - ../../apps/template-1/.env.example
     environment:
-      DB_HOST: database-service
+      DB_HOST: database-core
       DB_USERNAME: template1_user
       DB_PASSWORD: template1_password
       DB_DATABASE: template1_db

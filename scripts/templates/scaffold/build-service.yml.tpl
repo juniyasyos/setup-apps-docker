@@ -14,7 +14,7 @@
         APP_ENV: "production"
         APP_DIR: "{{SOURCE_DIR}}"
 
-        DB_HOST: "database-service"
+        DB_HOST: "database-core"
         DB_USERNAME: "{{DB_USER}}"
         DB_PASSWORD: "{{DB_PASSWORD}}"
         DB_DATABASE: "{{DB_NAME}}"

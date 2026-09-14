@@ -31,7 +31,10 @@ services:
       - "${MINIO_CONSOLE_PORT:-9091}:9001"
 
     networks:
-      - storage-network
+      storage-network:
+        aliases:
+          - minio-core
+          - minio
 
     healthcheck:
       test:

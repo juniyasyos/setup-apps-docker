@@ -17,7 +17,7 @@ TRUSTED_PROXIES=*
 # Database
 # ===========================================
 DB_CONNECTION=mysql
-DB_HOST=database-service
+DB_HOST=database-core
 DB_PORT=3306
 DB_DATABASE={{DB_NAME}}
 DB_USERNAME={{DB_USER}}

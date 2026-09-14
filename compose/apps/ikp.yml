@@ -17,7 +17,7 @@ services:
       PUBLIC_VOLUME: /var/www/ikp/public
       APP_URL: "http://${HOST_IP}:8200"
       TRUSTED_PROXIES: "*"
-      DB_HOST: database-service
+      DB_HOST: database-core
       DB_USERNAME: ikp_user
       DB_PASSWORD: ikp-password
       DB_DATABASE: ikp_db
@@ -70,7 +70,7 @@ services:
       - ../../apps/ikp/.env.example
     environment:
       APP_ENV: ${APP_ENV:-local}
-      DB_HOST: database-service
+      DB_HOST: database-core
       DB_USERNAME: ikp_user
       DB_PASSWORD: ikp-password
     volumes:
@@ -103,7 +103,7 @@ services:
       - ../../apps/ikp/.env.example
     environment:
       APP_ENV: ${APP_ENV:-local}
-      DB_HOST: database-service
+      DB_HOST: database-core
       DB_USERNAME: ikp_user
       DB_PASSWORD: ikp-password
     volumes:

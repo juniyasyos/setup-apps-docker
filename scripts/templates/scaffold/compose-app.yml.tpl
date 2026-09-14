@@ -19,7 +19,7 @@ services:
       APP_URL: "http://${HOST_IP:-localhost}:{{APP_PORT}}"
       TRUSTED_PROXIES: "*"
 
-      DB_HOST: database-service
+      DB_HOST: database-core
       DB_USERNAME: {{DB_USER}}
       DB_PASSWORD: {{DB_PASSWORD}}
       DB_DATABASE: {{DB_NAME}}
@@ -55,7 +55,7 @@ services:
     env_file:
       - ../../apps/{{APP_NAME}}/.env.example
     environment:
-      DB_HOST: database-service
+      DB_HOST: database-core
       DB_USERNAME: {{DB_USER}}
       DB_PASSWORD: {{DB_PASSWORD}}
       DB_DATABASE: {{DB_NAME}}
@@ -88,7 +88,7 @@ services:
     env_file:
       - ../../apps/{{APP_NAME}}/.env.example
     environment:
-      DB_HOST: database-service
+      DB_HOST: database-core
       DB_USERNAME: {{DB_USER}}
       DB_PASSWORD: {{DB_PASSWORD}}
       DB_DATABASE: {{DB_NAME}}

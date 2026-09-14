@@ -21,7 +21,7 @@ services:
       TRUSTED_PROXIES: "*"
 
       DB_CONNECTION: mysql
-      DB_HOST: database-service
+      DB_HOST: database-core
       DB_USERNAME: smsp_user
       DB_PASSWORD: smsp_password
       DB_DATABASE: smsp_db
@@ -74,7 +74,7 @@ services:
     env_file:
       - ../../apps/smsp/.env.example
     environment:
-      DB_HOST: database-service
+      DB_HOST: database-core
       DB_USERNAME: smsp_user
       DB_PASSWORD: smsp_password
       DB_DATABASE: smsp_db
@@ -107,7 +107,7 @@ services:
     env_file:
       - ../../apps/smsp/.env.example
     environment:
-      DB_HOST: database-service
+      DB_HOST: database-core
       DB_USERNAME: smsp_user
       DB_PASSWORD: smsp_password
       DB_DATABASE: smsp_db

@@ -17,7 +17,7 @@ services:
       PUBLIC_VOLUME: /var/www/siimut/public
       APP_URL: "http://${HOST_IP}:8000"
       TRUSTED_PROXIES: "*"
-      DB_HOST: database-service
+      DB_HOST: database-core
       DB_USERNAME: siimut_user
       DB_PASSWORD: siimut-password
       DB_DATABASE: siimut_db
@@ -65,7 +65,7 @@ services:
     env_file:
       - ../../apps/siimut/.env.example
     environment:
-      DB_HOST: database-service
+      DB_HOST: database-core
       DB_USER: siimut_user
       DB_PASSWORD: siimut-password
     volumes:
@@ -97,7 +97,7 @@ services:
     env_file:
       - ../../apps/siimut/.env.example
     environment:
-      DB_HOST: database-service
+      DB_HOST: database-core
       DB_USER: siimut_user
       DB_PASSWORD: siimut-password
     volumes:
