@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
 # =============================================================================
-# RSCH Platform — Automated MySQL Full Database Extraction Script
+# RSCH Platform — Automated MySQL App Database Extraction Script
 # =============================================================================
-# Skrip ini mengekstrak SELURUH basis data MySQL yang ada di dalam kontainer.
+# Skrip ini mengekstrak SELURUH basis data aplikasi MySQL menggunakan 
+# kredensial pengguna aplikasi terkonfigurasi (TANPA MENGGUNAKAN USER ROOT).
 # Fitur:
-#   1. Deteksi otomatis kontainer MySQL via Docker Compose (service db).
-#   2. Audit metadata (daftar tabel dan jumlah baris) sebelum backup.
-#   3. Full monolithic dump (seluruh database dalam satu file).
-#   4. Individual database dump (per aplikasi: siimut, ikp, iam, dll).
-#   5. Kompresi gzip dan pembuatan checksum SHA256 untuk verifikasi integritas.
-#   6. Tersimpan rapi di: ./backup_data/mysql/<timestamp>/
+#   1. Akses kontainer MySQL via Docker Compose (service: db).
+#   2. Penggunaan kredensial terisolasi per-aplikasi (siimut_user, ikp_user, iam_user, dll).
+#   3. Audit metadata tabel dan baris per basis data.
+#   4. Individual database dump per aplikasi.
+#   5. Combined monolithic dump (seluruh database aplikasi dalam satu file).
+#   6. Kompresi gzip dan pembuatan checksum SHA256 untuk verifikasi integritas.
+#   7. Tersimpan rapi di: ./backup_data/mysql/<timestamp>/
 # =============================================================================
 
 set -euo pipefail
@@ -34,9 +36,9 @@ log_error()   { echo -e "${RED}❌ $1${NC}"; }
 log_step()    { echo -e "\n${CYAN}══════════════════════════════════════════════════════════════${NC}"; echo -e "${BOLD}${CYAN}   $1${NC}"; echo -e "${CYAN}══════════════════════════════════════════════════════════════${NC}"; }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TAHAP 1: Deteksi Kontainer via Docker Compose & Kredensial MySQL
+# TAHAP 1: Deteksi Kontainer via Docker Compose & Verifikasi User Aplikasi
 # ─────────────────────────────────────────────────────────────────────────────
-log_step "TAHAP 1: Pemeriksaan Kontainer & Kredensial MySQL (Docker Compose)"
+log_step "TAHAP 1: Pemeriksaan Kontainer & Kredensial User Aplikasi (Tanpa Root)"
 
 # 1. Deteksi Metode Akses (Docker Compose)
 COMPOSE_CMD=()
@@ -57,92 +59,91 @@ else
     exit 1
 fi
 
-# 2. Uji Koneksi ke MySQL (Root Tanpa Password)
-if ! "${COMPOSE_CMD[@]}" mysql -u root -e "SELECT 1;" >/dev/null 2>&1; then
-    log_error "Gagal login ke MySQL dengan user root tanpa password!"
-    log_warn "Pastikan kontainer database aktif dan user root diizinkan masuk tanpa password."
+# 2. Peta Kredensial Aplikasi (Default & Ekstraksi Dinamis dari file env)
+declare -A APP_DBS=(
+    ["siimut_db"]="siimut_user:siimut-password"
+    ["ikp_db"]="ikp_user:ikp-password"
+    ["iam_db"]="iam_user:iam-password"
+)
+
+# Pindai file .env di folder env/ untuk menemukan database aplikasi tambahan
+for env_file in "${SCRIPT_DIR}"/env/.env.* "${SCRIPT_DIR}"/.env*; do
+    [ -f "$env_file" ] || continue
+    db_name=$(grep -E '^(DB_DATABASE|MYSQL_DATABASE)=' "$env_file" | head -n 1 | cut -d'=' -f2- | tr -d '\r"' || echo "")
+    db_user=$(grep -E '^(DB_USERNAME|MYSQL_USER)=' "$env_file" | head -n 1 | cut -d'=' -f2- | tr -d '\r"' || echo "")
+    db_pass=$(grep -E '^(DB_PASSWORD|MYSQL_PASSWORD)=' "$env_file" | head -n 1 | cut -d'=' -f2- | tr -d '\r"' || echo "")
+    
+    if [ -n "$db_name" ] && [ -n "$db_user" ] && [ -n "$db_pass" ] && [ "$db_user" != "root" ]; then
+        APP_DBS["$db_name"]="${db_user}:${db_pass}"
+    fi
+done
+
+log_info "Memeriksa koneksi database aplikasi menggunakan kredensial masing-masing..."
+
+VERIFIED_DBS=()
+for db in "${!APP_DBS[@]}"; do
+    IFS=":" read -r user pass <<< "${APP_DBS[$db]}"
+    if "${COMPOSE_CMD[@]}" mysql -u "$user" -p"$pass" -e "SELECT 1;" "$db" >/dev/null 2>&1; then
+        log_success "Database ${BOLD}${db}${NC} terverifikasi (User: ${BOLD}${user}${NC})"
+        VERIFIED_DBS+=("$db")
+    fi
+done
+
+if [ ${#VERIFIED_DBS[@]} -eq 0 ]; then
+    log_error "Tidak ada koneksi database aplikasi yang berhasil terverifikasi!"
     exit 1
 fi
-log_success "Koneksi ke MySQL database berhasil (root tanpa password)."
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TAHAP 2: Audit & Inventarisasi Database
+# TAHAP 2: Audit & Inventarisasi Database Aplikasi
 # ─────────────────────────────────────────────────────────────────────────────
-log_step "TAHAP 2: Audit & Inventarisasi Seluruh Basis Data"
+log_step "TAHAP 2: Audit & Inventarisasi Basis Data Aplikasi"
 
 mkdir -p "${OUTPUT_DIR}/individual"
 mkdir -p "${OUTPUT_DIR}/metadata"
 
-# Ambil daftar seluruh database (abaikan sistem database default MySQL)
-EXCLUDED_DB="'information_schema', 'mysql', 'performance_schema', 'sys'"
-QUERY_GET_DBS="SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN (${EXCLUDED_DB}) ORDER BY schema_name;"
+echo "Daftar database aplikasi yang akan diekstrak:"
+for db in "${VERIFIED_DBS[@]}"; do
+    IFS=":" read -r user pass <<< "${APP_DBS[$db]}"
+    echo -e "  • ${BOLD}${db}${NC} (User: ${user})"
+done
 
-DATABASES=$("${COMPOSE_CMD[@]}" mysql -u root -s -N -e "${QUERY_GET_DBS}")
+printf "%s\n" "${VERIFIED_DBS[@]}" > "${OUTPUT_DIR}/metadata/databases_list.txt"
 
-if [ -z "$DATABASES" ]; then
-    log_warn "Tidak ditemukan database aplikasi tambahan (hanya sistem MySQL default)!"
-else
-    echo -e "Daftar database yang akan diekstrak:"
-    for db in $DATABASES; do
-        echo -e "  • ${BOLD}${db}${NC}"
+# Simpan metadata struktur tabel per aplikasi
+log_info "Merekam baseline metadata tabel per aplikasi..."
+SUMMARY_FILE="${OUTPUT_DIR}/metadata/baseline_table_summary.txt"
+{
+    echo "================================================================"
+    echo "RSCH Platform — Baseline Metadata Tabel Aplikasi"
+    echo "Timestamp: ${TIMESTAMP}"
+    echo "================================================================"
+    echo ""
+    for db in "${VERIFIED_DBS[@]}"; do
+        IFS=":" read -r user pass <<< "${APP_DBS[$db]}"
+        echo "DATABASE: $db"
+        echo "----------------------------------------------------------------"
+        "${COMPOSE_CMD[@]}" mysql -u "$user" -p"$pass" -e "SHOW TABLES FROM \`$db\`;" "$db" 2>/dev/null || echo "Gagal mengambil daftar tabel."
+        echo ""
     done
-fi
-
-echo "$DATABASES" > "${OUTPUT_DIR}/metadata/databases_list.txt"
-
-# Simpan metadata struktur & jumlah baris tabel untuk verifikasi
-log_info "Merekam baseline metadata tabel dan perkiraan baris..."
-QUERY_AUDIT="
-SELECT 
-    table_schema AS 'Database',
-    COUNT(table_name) AS 'Total_Tables',
-    ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) AS 'Size_MB'
-FROM information_schema.tables 
-WHERE table_schema NOT IN (${EXCLUDED_DB})
-GROUP BY table_schema;
-"
-"${COMPOSE_CMD[@]}" mysql -u root -t -e "${QUERY_AUDIT}" > "${OUTPUT_DIR}/metadata/baseline_table_summary.txt"
-cat "${OUTPUT_DIR}/metadata/baseline_table_summary.txt"
+} > "$SUMMARY_FILE"
+cat "$SUMMARY_FILE"
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TAHAP 3: Ekstraksi Monolithic (Full Dump Semua Database)
+# TAHAP 3: Ekstraksi Individual per Database Aplikasi
 # ─────────────────────────────────────────────────────────────────────────────
-log_step "TAHAP 3: Membuat Full Dump Monolitik (All Databases)"
+log_step "TAHAP 3: Mengekstrak File SQL Terpisah per Aplikasi"
 
 FULL_DUMP_FILE="${OUTPUT_DIR}/all_databases_${TIMESTAMP}.sql"
-log_info "Mengekspor seluruh database ke: ${FULL_DUMP_FILE} ..."
+> "$FULL_DUMP_FILE"
 
-"${COMPOSE_CMD[@]}" mysqldump -u root \
-    --all-databases \
-    --single-transaction \
-    --quick \
-    --routines \
-    --triggers \
-    --events \
-    --hex-blob \
-    --max-allowed-packet=512M \
-    --default-character-set=utf8mb4 > "$FULL_DUMP_FILE"
-
-FULL_SIZE=$(du -h "$FULL_DUMP_FILE" | cut -f1)
-log_success "Full dump berhasil dibuat! Ukuran: ${BOLD}${FULL_SIZE}${NC}"
-
-# Kompres salinan full dump dengan gzip
-log_info "Mengompresi salinan full dump (gzip)..."
-gzip -c "$FULL_DUMP_FILE" > "${FULL_DUMP_FILE}.gz"
-GZ_SIZE=$(du -h "${FULL_DUMP_FILE}.gz" | cut -f1)
-log_success "Arsip terkompresi selesai: ${FULL_DUMP_FILE}.gz (${GZ_SIZE})"
-
-# ─────────────────────────────────────────────────────────────────────────────
-# TAHAP 4: Ekstraksi Individual per Database
-# ─────────────────────────────────────────────────────────────────────────────
-log_step "TAHAP 4: Mengekstrak File SQL Terpisah per Aplikasi"
-
-for db in $DATABASES; do
-    log_info "Mengekspor database: ${BOLD}${db}${NC}..."
+for db in "${VERIFIED_DBS[@]}"; do
+    IFS=":" read -r user pass <<< "${APP_DBS[$db]}"
+    log_info "Mengekspor database: ${BOLD}${db}${NC} (User: ${user})..."
     DB_FILE="${OUTPUT_DIR}/individual/${db}.sql"
     
-    "${COMPOSE_CMD[@]}" mysqldump -u root \
-        --databases "$db" \
+    "${COMPOSE_CMD[@]}" mysqldump -u "$user" -p"$pass" \
+        --no-tablespaces \
         --single-transaction \
         --quick \
         --routines \
@@ -150,7 +151,7 @@ for db in $DATABASES; do
         --events \
         --hex-blob \
         --max-allowed-packet=512M \
-        --default-character-set=utf8mb4 > "$DB_FILE"
+        --default-character-set=utf8mb4 "$db" > "$DB_FILE"
     
     # Checksum SHA256 untuk memvalidasi isi file nantinya
     sha256sum "$DB_FILE" > "${DB_FILE}.sha256"
@@ -160,7 +161,24 @@ for db in $DATABASES; do
     
     FILE_SIZE=$(du -h "$DB_FILE" | cut -f1)
     log_success "Selesai: ${db}.sql (${FILE_SIZE})"
+    
+    # Gabungkan ke file monolithic dump
+    cat "$DB_FILE" >> "$FULL_DUMP_FILE"
+    echo -e "\n\n" >> "$FULL_DUMP_FILE"
 done
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TAHAP 4: Membuat Dump Gabungan (Combined Monolithic Dump)
+# ─────────────────────────────────────────────────────────────────────────────
+log_step "TAHAP 4: Membuat Dump Gabungan Seluruh Aplikasi"
+
+FULL_SIZE=$(du -h "$FULL_DUMP_FILE" | cut -f1)
+log_success "Full dump gabungan berhasil dibuat! Ukuran: ${BOLD}${FULL_SIZE}${NC}"
+
+log_info "Mengompresi salinan full dump gabungan (gzip)..."
+gzip -c "$FULL_DUMP_FILE" > "${FULL_DUMP_FILE}.gz"
+GZ_SIZE=$(du -h "${FULL_DUMP_FILE}.gz" | cut -f1)
+log_success "Arsip terkompresi selesai: ${FULL_DUMP_FILE}.gz (${GZ_SIZE})"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TAHAP 5: Ringkasan & Link Cepat
@@ -174,17 +192,17 @@ ln -s "$TIMESTAMP" "$LATEST_LINK"
 
 echo ""
 echo -e "${GREEN}================================================================${NC}"
-echo -e "${BOLD}${GREEN}   ✅ EKSTRAKSI DATABASE MYSQL SELESAI DENGAN SUKSES!${NC}"
+echo -e "${BOLD}${GREEN}   ✅ EKSTRAKSI DATABASE MYSQL APLIKASI SELESAI DENGAN SUKSES!${NC}"
 echo -e "${GREEN}================================================================${NC}"
 echo -e "📁 Lokasi Penyimpanan : ${BOLD}${OUTPUT_DIR}${NC}"
 echo -e "🔗 Symlink Shortcut   : ${BOLD}${LATEST_LINK}${NC}"
 echo ""
 echo -e "Struktur Hasil Ekstraksi:"
-echo -e "  ├── ${BOLD}all_databases_${TIMESTAMP}.sql${NC}       (Dump keseluruhan)"
+echo -e "  ├── ${BOLD}all_databases_${TIMESTAMP}.sql${NC}       (Dump gabungan seluruh aplikasi)"
 echo -e "  ├── ${BOLD}all_databases_${TIMESTAMP}.sql.gz${NC}    (Arsip kompresi)"
-echo -e "  ├── ${BOLD}individual/${NC}                       (Dump per database: siimut, ikp, dll)"
-echo -e "  └── ${BOLD}metadata/${NC}                         (Daftar database & jumlah tabel)"
+echo -e "  ├── ${BOLD}individual/${NC}                       (Dump per aplikasi: siimut_db, ikp_db, iam_db)"
+echo -e "  └── ${BOLD}metadata/${NC}                         (Daftar database & manifest tabel)"
 echo ""
 log_info "Tips restore database tertentu di lingkungan baru:"
-echo -e "  ${YELLOW}mysql -u root -p < ${OUTPUT_DIR}/individual/<nama_db>.sql${NC}"
+echo -e "  ${YELLOW}mysql -u <app_user> -p < ${OUTPUT_DIR}/individual/<nama_db>.sql${NC}"
 echo -e "${GREEN}================================================================${NC}\n"
