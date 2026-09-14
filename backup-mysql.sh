@@ -4,7 +4,7 @@
 # =============================================================================
 # Skrip ini mengekstrak SELURUH basis data MySQL yang ada di dalam kontainer.
 # Fitur:
-#   1. Deteksi otomatis kontainer MySQL & kredensial root.
+#   1. Deteksi otomatis kontainer MySQL via Docker Compose (service db).
 #   2. Audit metadata (daftar tabel dan jumlah baris) sebelum backup.
 #   3. Full monolithic dump (seluruh database dalam satu file).
 #   4. Individual database dump (per aplikasi: siimut, ikp, iam, dll).
@@ -34,33 +34,32 @@ log_error()   { echo -e "${RED}❌ $1${NC}"; }
 log_step()    { echo -e "\n${CYAN}══════════════════════════════════════════════════════════════${NC}"; echo -e "${BOLD}${CYAN}   $1${NC}"; echo -e "${CYAN}══════════════════════════════════════════════════════════════${NC}"; }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TAHAP 1: Deteksi Kontainer & Kredensial MySQL
+# TAHAP 1: Deteksi Kontainer via Docker Compose & Kredensial MySQL
 # ─────────────────────────────────────────────────────────────────────────────
-log_step "TAHAP 1: Pemeriksaan Kontainer & Kredensial MySQL"
+log_step "TAHAP 1: Pemeriksaan Kontainer & Kredensial MySQL (Docker Compose)"
 
-# 1. Deteksi Nama Kontainer
-DB_CONTAINER=""
-if docker ps --format '{{.Names}}' | grep -q "^database-service$"; then
-    DB_CONTAINER="database-service"
-elif docker ps --format '{{.Names}}' | grep -q "database"; then
-    DB_CONTAINER=$(docker ps --format '{{.Names}}' | grep "database" | head -n 1)
-elif docker ps --format '{{.Names}}' | grep -q "mysql"; then
-    DB_CONTAINER=$(docker ps --format '{{.Names}}' | grep "mysql" | head -n 1)
-fi
-
-if [ -z "$DB_CONTAINER" ]; then
-    log_error "Kontainer MySQL tidak ditemukan atau sedang TIDAK BERJALAN!"
+# 1. Deteksi Metode Akses (Docker Compose)
+COMPOSE_CMD=()
+if [ -f "${SCRIPT_DIR}/docker-compose.base.yml" ] && docker compose -f "${SCRIPT_DIR}/docker-compose.base.yml" ps --services 2>/dev/null | grep -q "^db$"; then
+    COMPOSE_CMD=(docker compose -f "${SCRIPT_DIR}/docker-compose.base.yml" exec -T db)
+    log_success "Mengakses kontainer MySQL via Docker Compose: ${BOLD}docker-compose.base.yml (service: db)${NC}"
+elif [ -f "${SCRIPT_DIR}/docker-compose.yml" ] && docker compose -f "${SCRIPT_DIR}/docker-compose.yml" ps --services 2>/dev/null | grep -q "^db$"; then
+    COMPOSE_CMD=(docker compose -f "${SCRIPT_DIR}/docker-compose.yml" exec -T db)
+    log_success "Mengakses kontainer MySQL via Docker Compose: ${BOLD}docker-compose.yml (service: db)${NC}"
+elif docker ps --format '{{.Names}}' | grep -q "^database-service$"; then
+    COMPOSE_CMD=(docker exec -i database-service)
+    log_success "Mengakses kontainer MySQL via Docker Exec: ${BOLD}database-service${NC}"
+else
+    log_error "Kontainer MySQL (service 'db') tidak ditemukan atau sedang TIDAK BERJALAN!"
     echo ""
     log_warn "Pastikan kontainer database aktif terlebih dahulu:"
     echo "  docker compose -f docker-compose.base.yml up -d db"
-    echo "  (atau: ./rsch infra up db)"
     exit 1
 fi
-log_success "Kontainer MySQL terdeteksi: ${BOLD}${DB_CONTAINER}${NC}"
 
 # 2. Uji Koneksi ke MySQL (Root Tanpa Password)
-if ! docker exec "$DB_CONTAINER" mysql -u root -e "SELECT 1;" >/dev/null 2>&1; then
-    log_error "Gagal login ke MySQL dengan user root tanpa password pada kontainer ${DB_CONTAINER}!"
+if ! "${COMPOSE_CMD[@]}" mysql -u root -e "SELECT 1;" >/dev/null 2>&1; then
+    log_error "Gagal login ke MySQL dengan user root tanpa password!"
     log_warn "Pastikan kontainer database aktif dan user root diizinkan masuk tanpa password."
     exit 1
 fi
@@ -78,7 +77,7 @@ mkdir -p "${OUTPUT_DIR}/metadata"
 EXCLUDED_DB="'information_schema', 'mysql', 'performance_schema', 'sys'"
 QUERY_GET_DBS="SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN (${EXCLUDED_DB}) ORDER BY schema_name;"
 
-DATABASES=$(docker exec -i "$DB_CONTAINER" mysql -u root -s -N -e "${QUERY_GET_DBS}")
+DATABASES=$("${COMPOSE_CMD[@]}" mysql -u root -s -N -e "${QUERY_GET_DBS}")
 
 if [ -z "$DATABASES" ]; then
     log_warn "Tidak ditemukan database aplikasi tambahan (hanya sistem MySQL default)!"
@@ -102,7 +101,7 @@ FROM information_schema.tables
 WHERE table_schema NOT IN (${EXCLUDED_DB})
 GROUP BY table_schema;
 "
-docker exec -i "$DB_CONTAINER" mysql -u root -t -e "${QUERY_AUDIT}" > "${OUTPUT_DIR}/metadata/baseline_table_summary.txt"
+"${COMPOSE_CMD[@]}" mysql -u root -t -e "${QUERY_AUDIT}" > "${OUTPUT_DIR}/metadata/baseline_table_summary.txt"
 cat "${OUTPUT_DIR}/metadata/baseline_table_summary.txt"
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -113,7 +112,7 @@ log_step "TAHAP 3: Membuat Full Dump Monolitik (All Databases)"
 FULL_DUMP_FILE="${OUTPUT_DIR}/all_databases_${TIMESTAMP}.sql"
 log_info "Mengekspor seluruh database ke: ${FULL_DUMP_FILE} ..."
 
-docker exec -i "$DB_CONTAINER" mysqldump -u root \
+"${COMPOSE_CMD[@]}" mysqldump -u root \
     --all-databases \
     --single-transaction \
     --quick \
@@ -142,7 +141,7 @@ for db in $DATABASES; do
     log_info "Mengekspor database: ${BOLD}${db}${NC}..."
     DB_FILE="${OUTPUT_DIR}/individual/${db}.sql"
     
-    docker exec -i "$DB_CONTAINER" mysqldump -u root \
+    "${COMPOSE_CMD[@]}" mysqldump -u root \
         --databases "$db" \
         --single-transaction \
         --quick \
