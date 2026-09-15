@@ -66,6 +66,10 @@ APP_BRANCHES=()
 APP_HAS_PROD=()
 APP_HAS_DEPS=()
 APP_DESCS=()
+APP_ROLES=()
+APP_PAIRS=()
+APP_ROLE=""
+APP_PAIR=""
 
 load_all_apps() {
     APP_NAMES=(); APP_DIRS=(); APP_REPOS=(); APP_BRANCHES=()
@@ -170,6 +174,8 @@ load_app_config() {
             HAS_PROD_ENV="${APP_HAS_PROD[$i]}"
             HAS_LOCAL_DEPS="${APP_HAS_DEPS[$i]}"
             APP_DESC="${APP_DESCS[$i]}"
+            APP_ROLE="${APP_ROLES[$i]}"
+            APP_PAIR="${APP_PAIRS[$i]}"
             return 0
         fi
     done
@@ -552,18 +558,8 @@ ensure_app_infrastructure() {
     local source_dir="$APP_DIR"
     local desc="${APP_DESC:-${name}}"
 
-    local role="${APP_ROLES[0]}" # Wait, we need to check if it's frontend
-    # To properly check if it's frontend, we can check APP_ROLES array for current APP_NAME, or just check APP_PAIRS
-    # But it's easier to use _has_frontend or similar. Actually, in prepare.sh load_all_apps populates APP_ROLES.
-    local app_role="standalone"
-    local app_pair=""
-    for i in "${!APP_NAMES[@]}"; do
-        if [ "${APP_NAMES[$i]}" = "$name" ]; then
-            app_role="${APP_ROLES[$i]}"
-            app_pair="${APP_PAIRS[$i]}"
-            break
-        fi
-    done
+    local app_role="${APP_ROLE:-standalone}"
+    local app_pair="${APP_PAIR:-}"
 
     local apps_dir="${PROJECT_DIR}/apps/${name}"
     local env_name=".env.example"
@@ -691,24 +687,14 @@ prepare_app() {
         fi
     else
         # ── Cek fullstack project ──────────────────────────────────────────────
-        local yml_file="${PROJECT_DIR}/apps/${target}/app.yml"
-        if [ ! -f "$yml_file" ]; then
-            # Maybe it's a frontend from a combined app.yml
-            # We rely on load_app_config to populate APP_ROLES
-            if ! load_app_config "$target"; then
-                log_error "App '${target}' tidak dikenal!"
-                exit 1
-            fi
-        else
-            if ! load_app_config "$target"; then
-                log_error "App '${target}' tidak dikenal!"
-                exit 1
-            fi
+        if ! load_app_config "$target"; then
+            log_error "App '${target}' tidak dikenal!"
+            exit 1
         fi
         
-        # Now use APP_ROLES which is loaded correctly for both BE and FE
-        local role="${APP_ROLES[0]}"
-        local fullstack_pair="${APP_PAIRS[0]}"
+        # Now use APP_ROLE and APP_PAIR loaded correctly for both BE and FE
+        local role="${APP_ROLE}"
+        local fullstack_pair="${APP_PAIR}"
         
         # If we target the frontend directly but we don't allow it, redirect.
         if [ "$role" = "frontend" ] && [ "$_from_pair" = "false" ] && [ -n "$fullstack_pair" ]; then
@@ -721,9 +707,9 @@ prepare_app() {
         fi
     fi
 
+    local role="${APP_ROLE}"
+    local fullstack_pair="${APP_PAIR}"
     local skip_prepare=false
-    local role="${APP_ROLES[0]}"
-    local fullstack_pair="${APP_PAIRS[0]}"
     if [ "$role" = "frontend" ] && [ "${TARGET_FE}" = "false" ]; then skip_prepare=true; fi
     if [ "$role" = "backend" ] && [ "${TARGET_BE}" = "false" ]; then skip_prepare=true; fi
 
