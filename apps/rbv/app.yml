@@ -1,7 +1,7 @@
 # RBV — Ruang Baca Virtual Platform
 name: rbv
 role: standalone
-repo: https://github.com/kiflinnadil/new-RBV.git
+repo: https://github.com/RSCH-Platform/RBV.git
 branch: main
 source_dir: rbv-app
 image: rbv
