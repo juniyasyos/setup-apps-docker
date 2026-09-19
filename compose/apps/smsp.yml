@@ -50,6 +50,7 @@ services:
       IAM_DEFAULT_REDIRECT: "http://${HOST_IP:-localhost}:7250/dashboard"
       IAM_APP_KEY: "smartpresence-services"
       IAM_SYNC_ROLES: true
+      IAM_USER_SYNC_MODE: "push"
       IAM_UNIT_KERJA_MODEL: "App\\Models\\WorkUnit"
     volumes:
       - smsp_storage:/var/www/smsp/storage
