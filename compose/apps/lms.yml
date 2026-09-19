@@ -42,6 +42,9 @@ services:
       IAM_JWT_LEEWAY: "60"
       IAM_IDENTIFIER_FIELD: nip
       IAM_PRESERVE_SESSION_ID: true
+      IAM_BACKCHANNEL_METHOD: "jwt"
+      IAM_ROLE_SYNC_MODE: "push"
+      IAM_USER_SYNC_MODE: "push"
     volumes:
       - lms_storage:/var/www/lms/storage
       - lms_bootstrap_cache:/var/www/lms/bootstrap/cache
