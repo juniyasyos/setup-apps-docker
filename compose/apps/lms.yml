@@ -42,9 +42,15 @@ services:
       IAM_JWT_LEEWAY: "60"
       IAM_IDENTIFIER_FIELD: nip
       IAM_PRESERVE_SESSION_ID: true
+      IAM_BACKCHANNEL: "http://web:8100"
       IAM_BACKCHANNEL_METHOD: "jwt"
       IAM_ROLE_SYNC_MODE: "push"
       IAM_USER_SYNC_MODE: "push"
+      IAM_ROLE_SYNC_FROM_IAM_ALLOW_CREATE: "true"
+      IAM_USER_SYNC_FROM_IAM_ALLOW_CREATE: "true"
+      IAM_UNIT_KERJA_MODEL: "App\\Models\\UnitKerja"
+      IAM_SYNC_UNIT_KERJA: "true"
+      IAM_SYNC_ROLES: "true"
     volumes:
       - lms_storage:/var/www/lms/storage
       - lms_bootstrap_cache:/var/www/lms/bootstrap/cache
