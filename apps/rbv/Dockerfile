@@ -10,7 +10,7 @@
 # Stage 1: Base — PHP + extensions
 # ─────────────────────────────────────────
 ARG PHP_VERSION=8.4.27
-ARG ALPINE_VERSION=3.21
+ARG ALPINE_VERSION=3.24
 FROM php:${PHP_VERSION}-fpm-alpine${ALPINE_VERSION} AS base
 
 ARG UID=1000
