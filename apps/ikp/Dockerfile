@@ -2,7 +2,9 @@
 # Production IKP Image for Registry
 # Self-contained, no external mounts needed
 # =========================
-FROM php:8.4-fpm-alpine AS base
+ARG PHP_VERSION=8.4.27
+ARG ALPINE_VERSION=""
+FROM php:${PHP_VERSION}-fpm-alpine${ALPINE_VERSION} AS base
 
 ARG UID=1000
 ARG GID=1000
@@ -220,6 +222,12 @@ RUN set -eux; \
     echo "display_errors=Off"; \
     echo "log_errors=On"; \
     echo "error_log=/var/log/php_errors.log"; \
+    echo "allow_url_fopen=On"; \
+    echo "allow_url_include=Off"; \
+    echo "session.upload_progress.enabled=Off"; \
+    echo "session.use_strict_mode=1"; \
+    echo "session.cookie_httponly=1"; \
+    echo "disable_functions=exec,passthru,shell_exec,system,proc_open,popen,parse_ini_file,show_source"; \
   } > /usr/local/etc/php/conf.d/laravel.ini; \
   { \
     echo "opcache.enable=1"; \

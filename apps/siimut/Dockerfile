@@ -5,7 +5,7 @@
 # Build once, use for app / queue / scheduler
 # ============================================================
 
-ARG PHP_VERSION=8.4
+ARG PHP_VERSION=8.4.27
 ARG ALPINE_VERSION=3.21
 
 # ============================================================
@@ -109,6 +109,12 @@ RUN set -eux; \
         echo "display_errors=Off"; \
         echo "log_errors=On"; \
         echo "error_log=/proc/self/fd/2"; \
+        echo "allow_url_fopen=On"; \
+        echo "allow_url_include=Off"; \
+        echo "session.upload_progress.enabled=Off"; \
+        echo "session.use_strict_mode=1"; \
+        echo "session.cookie_httponly=1"; \
+        echo "disable_functions=exec,passthru,shell_exec,system,proc_open,popen,parse_ini_file,show_source"; \
     } > /usr/local/etc/php/conf.d/laravel.ini; \
     { \
         echo "opcache.enable=1"; \
