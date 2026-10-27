@@ -12,7 +12,7 @@ services:
       - ../../apps/ikp/.env.example
     environment:
       APP_ENV: ${APP_ENV:-local}
-      APP_DEBUG: "true"
+      APP_DEBUG: ${APP_DEBUG:-false}
       APP_WORKDIR: /var/www/ikp
       PUBLIC_VOLUME: /var/www/ikp/public
       APP_URL: "http://${HOST_IP}:8200"

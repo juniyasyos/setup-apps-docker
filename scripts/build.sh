@@ -321,7 +321,7 @@ build_images() {
 
         log_info "Building [$app_name] → compose service [$svc] version [$ver]..."
 
-        if ! eval "${env_name}=\"${ver}\" docker compose -f \"$PROJECT_ROOT/$COMPOSE_FILE\" build \"$svc\""; then
+        if ! eval "${env_name}=\"${ver}\" docker compose -f \"$PROJECT_ROOT/$COMPOSE_FILE\" build --pull \"$svc\""; then
             log_error "Build failed for [$app_name]"
             return 1
         fi

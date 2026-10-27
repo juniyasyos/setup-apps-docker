@@ -13,7 +13,7 @@ services:
       - ../../apps/lms/.env.example
     environment:
       APP_ENV: ${APP_ENV:-local}
-      APP_DEBUG: "true"
+      APP_DEBUG: ${APP_DEBUG:-false}
       APP_WORKDIR: /var/www/lms
       PUBLIC_VOLUME: /var/www/lms/public
       APP_URL: "http://${HOST_IP}:7100"

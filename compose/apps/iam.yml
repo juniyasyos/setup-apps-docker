@@ -12,6 +12,7 @@ services:
       - ../../apps/iam/.env.example
     environment:
       APP_ENV: ${APP_ENV:-local}
+      APP_DEBUG: ${APP_DEBUG:-false}
       TRUSTED_PROXIES: "*"
       PHP_OPCACHE_VALIDATE_TIMESTAMPS: "0"
       APP_WORKDIR: /var/www/iam

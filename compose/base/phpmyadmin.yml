@@ -6,14 +6,13 @@ services:
     restart: unless-stopped
 
     ports:
-      - "${PMA_PORT:-8888}:80"
+      - "127.0.0.1:${PMA_PORT:-8888}:80"
     environment:
       PMA_HOST: db
       PMA_PORT: 3306
-      PMA_ARBITRARY: 1
+      PMA_ARBITRARY: 0
       PMA_ABSOLUTE_URI: http://localhost:${PMA_PORT:-8888}/
-      PMA_BLOWFISH_SECRET: password
-      MYSQL_ROOT_PASSWORD: rootpass123 
+      PMA_BLOWFISH_SECRET: ${PMA_BLOWFISH_SECRET:-c8e9f2a4b1d6e3f5a7c0b2d4e6f8a1c3}
       UPLOAD_LIMIT: 1024M
       MEMORY_LIMIT: 1024M
       POST_MAX_SIZE: 1024M

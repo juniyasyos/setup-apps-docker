@@ -6,8 +6,13 @@ services:
   web:
     ports:
       - "${SIIMUT_HOST_PORT:-8000}:8000"
-      - "${IKP_HOST_PORT:-8200}:8200"
       - "${IAM_HOST_PORT:-8100}:8100"
+      - "${IKP_HOST_PORT:-8200}:8200"
+      - "${LMS_HOST_PORT:-7100}:7100"
+      - "${SMSP_HOST_PORT:-7200}:7200"
+      - "${FE_SMSP_HOST_PORT:-7250}:7250"
+      - "${RBV_HOST_PORT:-7300}:7300"
+      - "${TEMPLATE_1_HOST_PORT:-8400}:8400"
 
   # Production overrides: optimized workers, production settings
   app-siimut:
@@ -21,6 +26,26 @@ services:
       APP_DEBUG: "false"
 
   app-iam:
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+
+  app-lms:
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+
+  app-rbv:
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+
+  app-smsp:
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+
+  app-template-1:
     environment:
       APP_ENV: production
       APP_DEBUG: "false"

@@ -13,7 +13,7 @@ services:
       - ../../apps/template-1/.env.example
     environment:
       APP_ENV: production
-      APP_DEBUG: "true"
+      APP_DEBUG: ${APP_DEBUG:-false}
       APP_WORKDIR: /var/www/template-1
       PUBLIC_VOLUME: /var/www/template-1/public
       APP_URL: "http://${HOST_IP:-localhost}:8400"
